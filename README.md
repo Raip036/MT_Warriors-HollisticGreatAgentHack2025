@@ -135,11 +135,12 @@ python pharmacy_agent.py
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `HOLISTIC_AI_TEAM_ID` | Your team identifier | ✅ Yes |
-| `HOLISTIC_AI_API_TOKEN` | API authentication token | ✅ Yes |
-| `HOLISTIC_AI_API_URL` | AWS API Gateway endpoint | ✅ Yes |
+| Variable                | Description                                         | Required               |
+| ----------------------- | --------------------------------------------------- | ---------------------- |
+| `HOLISTIC_AI_TEAM_ID`   | Your team identifier                                | ✅ Yes                  |
+| `HOLISTIC_AI_API_TOKEN` | API authentication token                            | ✅ Yes                  |
+| `HOLISTIC_AI_API_URL`   | AWS API Gateway endpoint for your Holistic AI agent | ✅ Yes                  |
+| `VALYU_API_KEY`         | API key for Valyu model access                      | ⚠️ Only if using Valyu |
 
 ### Budget Management
 
