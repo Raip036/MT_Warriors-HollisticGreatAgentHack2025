@@ -7,33 +7,61 @@ def main():
         print("❌ Missing environment variables")
         return
 
+    # Initialize agents
     classifier = InputClassifier()
     safety = SafetyAdvisor()
     pharmacy = PharmacyAgent()
 
-    print("💬 Multi-Agent Pharmacy Session")
-    print("Type 'exit' to quit")
+    print("\n💬 Multi-Agent Pharmacy Session")
+    print("Type 'exit' to quit\n")
 
     while True:
         user_input = input("❓ Your question: ").strip()
         if user_input.lower() in ("exit", "quit"):
+            print("👋 Exiting session. Stay safe!")
             break
+        if not user_input:
+            print("⚠️ Please enter a valid question.\n")
+            continue
+
+        print("\n==============================")
+        print("📝 Step 1: Classify Input")
 
         # Step 1: Classify intent & query type
         if not classifier.is_safe(user_input):
-            print("⚠️ Input potentially unsafe or prompt injection. Try again.")
+            print("⚠️ Input potentially unsafe or prompt injection. Try again.\n")
             continue
-        query_type = classifier.classify_query_type(user_input)
-        print(f"📝 Detected query type: {query_type}")
 
-        # Step 2: Safety assessment
-        print(safety.get_risk_message(user_input))
-        if not safety.is_safe(user_input):
+        query_type = classifier.classify_query_type(user_input)
+        classification = classifier.classify_input(user_input)
+
+        print(f"💡 Detected Query Type: {query_type}")
+        print(f"🧠 Intent: {classification.intent}")
+        print(f"⚠️ Risk Level: {classification.risk_level}")
+        print(f"📞 Needs Handoff: {classification.needs_handoff}")
+        print(f"🔍 Explanation: {classification.explanation}")
+
+        # Step 2: Safety assessment using LLM
+        print("\n==============================")
+        print("🛡️ Step 2: Safety Assessment")
+
+        assessment = safety.evaluate_risk(user_input)
+        print(f"⚠️ Risk: {assessment.risk_level.upper()}")
+        print(f"📞 Needs Handoff: {assessment.needs_handoff}")
+        print(f"🔍 Explanation: {assessment.explanation}")
+        print(f"📝 Summary: {getattr(assessment, 'summary', 'No summary available')}")
+        
+        # Skip unsafe input
+        if assessment.risk_level.lower() != "low":
+            print("\n❌ This query is unsafe. Skipping Pharmacy response.\n")
             continue
 
         # Step 3: Send safe input to PharmacyAgent
+        print("\n==============================")
+        print("💊 Step 3: Pharmacy Response")
         response = pharmacy.ask(user_input)
-        print(f"💬 Pharmacy Response: {response}")
+        print(f"💬 Response:\n{response}\n")
+        print("==============================\n")
 
 if __name__ == "__main__":
     main()
