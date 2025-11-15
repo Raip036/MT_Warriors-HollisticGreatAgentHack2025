@@ -1,4 +1,4 @@
-# 🏥 Pharmacy AI Agent
+# 🏥 PharmaMiku AI Agent
 
 > An intelligent pharmacy consultation assistant powered by Claude 3.5 Sonnet via AWS Bedrock
 
@@ -10,7 +10,7 @@
 
 ## 📖 Overview
 
-Pharmacy AI Agent is a smart assistant that provides reliable information about medications, drug interactions, dosages, and pharmaceutical guidance. Built for **The Great Hack 2025**, this agent leverages the power of Claude 3.5 Sonnet to answer pharmacy-related questions with accuracy and care.
+PharmaMiku AI Agent is a smart assistant that provides reliable information about medications, drug interactions, dosages, and pharmaceutical guidance. Built for the **Great Agent Hack 2025**, this agent leverages the power of Claude 3.5 Sonnet to answer pharmacy- and drug-related questions with accuracy, transparency and care.
 
 ### ✨ Key Features
 
