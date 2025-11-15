@@ -1,0 +1,12 @@
+# Core dependencies
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# LangChain and LangGraph (for future agent enhancement)
+langgraph>=0.0.1
+langchain-core>=0.1.0
+langchain-openai>=0.0.1
+
+# Optional: For future tool integration
+# langchain-valyu
+# langchain-agent
