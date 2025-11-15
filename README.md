@@ -34,45 +34,63 @@ This agent provides **general pharmaceutical information only**. Always consult 
 - pip (Python package manager)
 - API credentials from The Great Hack 2025
 
-### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd pharmacy-agent
-   ```
+ 1. **Backend (FastAPI)**
 
-2. **Create a virtual environment**
-   ```bash
-   # macOS/Linux
-   python3 -m venv venv
-   source venv/bin/activate
+    ```bash
+    cd backend
+    ```
 
-   # Windows
-   python -m venv venv
-   venv\Scripts\activate
-   ```
+    Create virtual enviroment
+    ```bash
+    python3 -m venv venv
+    ```
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+    Create .env file with:
+    ### Environment Variables
 
-4. **Configure environment variables**
-   
-   Create a `.env` file in the project root:
-   ```bash
-   cp .env.template .env
-   ```
-   
-   Update `.env` with your credentials:
-   ```env
-   HOLISTIC_AI_TEAM_ID=your_team_id_here
-   HOLISTIC_AI_API_TOKEN=your_api_token_here
-   HOLISTIC_AI_API_URL=https://ctwa92wg1b.execute-api.us-east-1.amazonaws.com/prod/invoke
-   ```
+| Variable                | Description                                         | Required               |
+| ----------------------- | --------------------------------------------------- | ---------------------- |
+| `HOLISTIC_AI_TEAM_ID`   | Your team identifier                                | ✅ Yes                  |
+| `HOLISTIC_AI_API_TOKEN` | API authentication token                            | ✅ Yes                  |
+| `HOLISTIC_AI_API_URL`   | AWS API Gateway endpoint for your Holistic AI agent | ✅ Yes                  |
+| `VALYU_API_KEY`         | API key for Valyu model access                      | ⚠️ Only if using Valyu |
 
- 5. **Backend (FastAPI)**
+
+Start FastAPI from backend folder:
+```bash
+# From backend folder
+uvicorn server:app --reload --host 0.0.0.0 --port 8000
+```
+
+2. **Front end**
+
+```bash
+cd frontend
+ Npx create-next-app@latest
+```
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 These steps set up the Python virtual environment and install the required packages.
 
@@ -167,14 +185,7 @@ pharmacy-agent/
 
 ## 🔧 Configuration
 
-### Environment Variables
 
-| Variable                | Description                                         | Required               |
-| ----------------------- | --------------------------------------------------- | ---------------------- |
-| `HOLISTIC_AI_TEAM_ID`   | Your team identifier                                | ✅ Yes                  |
-| `HOLISTIC_AI_API_TOKEN` | API authentication token                            | ✅ Yes                  |
-| `HOLISTIC_AI_API_URL`   | AWS API Gateway endpoint for your Holistic AI agent | ✅ Yes                  |
-| `VALYU_API_KEY`         | API key for Valyu model access                      | ⚠️ Only if using Valyu |
 
 ### Budget Management
 
