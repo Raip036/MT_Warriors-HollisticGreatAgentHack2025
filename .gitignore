@@ -1,23 +1,32 @@
-# Environment Variables (IMPORTANT: Never commit API keys!)
+# =================================
+# Environment Variables
+# =================================
 .env
 .env.local
 .env.*.local
 
-# Virtual Environment
+# =================================
+# Python Virtual Environment
+# =================================
 venv/
+fastapivenv/
 env/
 ENV/
 env.bak/
 venv.bak/
 
+# =================================
 # Python Cache
+# =================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 
-# Distribution / Packaging
+# =================================
+# Python Packaging
+# =================================
 build/
 develop-eggs/
 dist/
@@ -36,11 +45,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
+# =================================
+# Unit Test / Coverage
+# =================================
 htmlcov/
 .tox/
 .nox/
@@ -54,11 +61,15 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# =================================
 # Jupyter Notebook
+# =================================
 .ipynb_checkpoints
 *.ipynb
 
+# =================================
 # IDEs
+# =================================
 .vscode/
 .idea/
 *.swp
@@ -66,16 +77,30 @@ coverage.xml
 *~
 .DS_Store
 
+# =================================
 # Logs
+# =================================
 *.log
 logs/
 
+# =================================
 # Database
+# =================================
 *.db
 *.sqlite
 *.sqlite3
 
+# =================================
+# Node / Frontend (Next.js)
+# =================================
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+frontend/out/
+
+# =================================
 # Other
+# =================================
 .mypy_cache/
 .dmypy.json
 dmypy.json
