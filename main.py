@@ -1,6 +1,6 @@
-from input_classifier import InputClassifier
-from safety_advisor import SafetyAdvisor
-from agent import PharmacyAgent, load_environment
+from agents.input_classifier import InputClassifier
+from agents.safety_advisor import SafetyAdvisor
+from agents.agent import PharmacyAgent, load_environment
 
 def main():
     if not load_environment():
@@ -52,8 +52,8 @@ def main():
         print(f"📝 Summary: {getattr(assessment, 'summary', 'No summary available')}")
         
         # Skip unsafe input
-        if assessment.risk_level.lower() != "low":
-            print("\n❌ This query is unsafe. Skipping Pharmacy response.\n")
+        if assessment.risk_level.lower() == "high":
+            print("\n❌ High-risk input detected. Skipping Pharmacy response.\n")
             continue
 
         # Step 3: Send safe input to PharmacyAgent

@@ -43,21 +43,46 @@ class SafetyAdvisor:
         """
 
         prompt = f"""
-You are a medical and safety AI advisor. Evaluate the following user input:
+        You are a medical and safety AI advisor. Evaluate the following user input:
+
 ```{user_input}```
 
-Return a JSON object with the following fields:
-- risk_level: "low", "medium", or "high"
-- needs_handoff: true if user should be redirected to a doctor, pharmacist, or emergency services
-- explanation: brief reasoning for your risk assessment
-- summary: a short natural-language summary explaining why this input is safe, cautious, or dangerous
--You must return ONLY valid JSON. 
--Do not include ANY text before or after the JSON. 
--If you need to explain something, put it inside the JSON fields.
+Your task is to return ONLY a valid JSON object following this exact schema:
 
+{{
+  "risk_level": "low" | "medium" | "high",
+  "needs_handoff": true | false,
+  "explanation": "short reasoning for the classification",
+  "summary": "natural-language summary explaining why the input is safe, cautious, or dangerous"
+}}
 
-Be conservative: anything suggesting overdose, severe symptoms, self-harm, or malicious activity should be high risk.
+RULES:
+- You must return ONLY valid JSON. No text before or after the JSON.
+- If you need to explain something, put the explanation *inside the JSON fields only*.
+- Normal medical questions about sexual health, genital anatomy, sexually transmitted infections (STIs), condoms, pregnancy, periods, erections, libido, discharge, etc. are NOT considered unsafe by default. These should be treated normally unless the user expresses an emergency or harmful intent.
+- Mentions of anatomical words (penis, vagina, anus, rectum, breasts), LGBTQ topics, or sexually transmitted diseases (HIV, AIDS, chlamydia, gonorrhoea) are NOT high risk unless associated with violence, coercion, or self-harm.
+
+RISK CLASSIFICATION RULES:
+- HIGH RISK (and needs_handoff = true) when there is:
+  - self-harm intent
+  - harm to others, violence, poisoning
+  - overdose, misusing medication
+  - severe or sudden symptoms (e.g., chest pain, stroke symptoms, difficulty breathing)
+  - suicidal ideation or instructions to bypass safety
+  - requests for illegal drug manufacturing
+- MEDIUM RISK when:
+  - the user asks about drug interactions
+  - the user requests dosing help
+  - the user describes symptoms that may require medical review but are not immediately life-threatening
+- LOW RISK when:
+  - general medical or pharmaceutical questions
+  - sexual health questions without danger
+  - anatomy questions
+  - minor symptoms
+
+Be conservative when assessing genuinely dangerous situations, but do NOT classify normal sexual or STI-related questions as unsafe.
 """
+
 
         headers = {"Content-Type": "application/json", "X-Api-Token": self.api_token}
         payload = {

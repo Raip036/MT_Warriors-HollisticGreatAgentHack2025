@@ -17,22 +17,17 @@ class InputClassification(BaseModel):
 class InputClassifier:
     """
     Classifies user input for intent, query type, and potential misuse.
-    Combines simple heuristics with structured output for safety.
     """
 
-    # Define safe query types
     QUERY_TYPES = ["drug_info", "drug_interaction", "general_question"]
 
     def __init__(self):
         print("🧠 Input Classifier initialized")
 
-    # --------------------------------------------
-    # Low-level checks
-    # --------------------------------------------
+    # ------------------------------------------------
+    # Low-level safety check
+    # ------------------------------------------------
     def is_valid(self, user_input: str) -> bool:
-        """
-        Quick check for empty input or suspicious prompt injection patterns
-        """
         suspicious_keywords = [
             "ignore instructions",
             "bypass safety",
@@ -44,23 +39,24 @@ class InputClassifier:
                 return False
         return bool(user_input.strip())
 
+    def is_safe(self, user_input: str) -> bool:
+        """High-level safety check wrapper."""
+        return self.is_valid(user_input)
+
+    # ------------------------------------------------
+    # Intent + query type detection
+    # ------------------------------------------------
     def detect_intent(self, user_input: str) -> str:
-        """
-        Detects the user's intent.
-        Returns: 'informational', 'interaction', or 'other'
-        """
         user_input_lower = user_input.lower()
-        if any(word in user_input_lower for word in ["side effect", "dosage", "use", "take"]):
+
+        if any(w in user_input_lower for w in ["side effect", "dosage", "use", "take"]):
             return "informational"
-        elif any(word in user_input_lower for word in ["interaction", "mix", "combine"]):
+        elif any(w in user_input_lower for w in ["interaction", "mix", "combine"]):
             return "interaction"
         else:
             return "other"
 
     def classify_query_type(self, user_input: str) -> Literal["drug_info", "drug_interaction", "general_question"]:
-        """
-        Classify input into one of the predefined query types
-        """
         intent = self.detect_intent(user_input)
         if intent == "informational":
             return "drug_info"
@@ -69,50 +65,42 @@ class InputClassifier:
         else:
             return "general_question"
 
-    def is_safe(self, user_input: str) -> bool:
-        """
-        High-level safety check for prompt misuse / injections
-        """
-        if not self.is_valid(user_input):
-            return False
-        # Add more safety checks if needed
-        return True
-
-    # --------------------------------------------
+    # ------------------------------------------------
     # Structured classification
-    # --------------------------------------------
+    # ------------------------------------------------
     def classify_input(self, user_input: str) -> InputClassification:
-        """
-        Returns a structured classification:
-        - intent
-        - risk_level
-        - needs_handoff
-        - explanation
-        """
-        # Detect intent
         intent_label = self.detect_intent(user_input)
 
-        # Determine risk_level
+        # Safety categories
         if not self.is_safe(user_input):
-            risk_level = "high"
-            needs_handoff = True
-            explanation = "Unsafe input detected (suspicious keywords or empty input). Escalate."
-        elif any(word in user_input.lower() for word in ["chest pain", "difficulty breathing", "overdose", "severe pain"]):
-            risk_level = "high"
-            needs_handoff = True
-            explanation = "Potential medical emergency. Escalate to professional."
+            return InputClassification(
+                intent=intent_label,
+                risk_level="high",
+                needs_handoff=True,
+                explanation="Unsafe input detected (prompt injection or empty input)."
+            )
+
+        elif any(x in user_input.lower() for x in [
+            "chest pain", "difficulty breathing", "overdose", "severe pain"
+        ]):
+            return InputClassification(
+                intent=intent_label,
+                risk_level="high",
+                needs_handoff=True,
+                explanation="Potential medical emergency detected."
+            )
+
         elif intent_label == "interaction":
-            risk_level = "medium"
-            needs_handoff = False
-            explanation = "Interaction question detected; user should double-check with pharmacist."
-        else:
-            risk_level = "low"
-            needs_handoff = False
-            explanation = "Standard informational or general question; safe to answer."
+            return InputClassification(
+                intent=intent_label,
+                risk_level="medium",
+                needs_handoff=False,
+                explanation="Drug interaction questions require extra caution."
+            )
 
         return InputClassification(
             intent=intent_label,
-            risk_level=risk_level,
-            needs_handoff=needs_handoff,
-            explanation=explanation
+            risk_level="low",
+            needs_handoff=False,
+            explanation="General safe informational question."
         )
