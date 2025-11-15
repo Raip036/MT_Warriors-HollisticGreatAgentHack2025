@@ -72,15 +72,72 @@ This agent provides **general pharmaceutical information only**. Always consult 
    HOLISTIC_AI_API_URL=https://ctwa92wg1b.execute-api.us-east-1.amazonaws.com/prod/invoke
    ```
 
-5. **Test the connection**
-   ```bash
-   python APItest.py
-   ```
+ 5. **Backend (FastAPI)**
 
-6. **Run the agent**
-   ```bash
-   python agent.py
-   ```
+These steps set up the Python virtual environment and install the required packages.
+
+Navigate to the backend folder:
+
+```bash
+cd backend
+```
+Create a virtual environment:
+
+```bash
+python -m venv venv
+```
+Activate the virtual environment:
+
+On macOS/Linux:
+
+```bash
+source venv/bin/activate
+```
+On Windows (PowerShell):
+
+```bash
+.\venv\Scripts\Activate
+```
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+6. **Frontend**
+
+These steps install the Node.js packages.
+
+In a new terminal, navigate to the frontend folder:
+
+```bash
+cd frontend
+```
+Install dependencies:
+
+```Bash
+npm install
+```
+🏃 Running the Project
+1. Start the Backend Server
+
+Make sure you are in the backend folder and your virtual environment is active.
+
+Run the Uvicorn server:
+
+```Bash
+uvicorn server:app --reload --host 0.0.0.0 --port 8000
+```
+Your backend API will be running at http://localhost:8000
+
+6. **Start the Frontend App
+
+Make sure you are in the frontend folder.
+
+Run the development server:
+
+```Bash
+npm run dev
+```
 
 ---
 
@@ -98,29 +155,6 @@ pharmacy-agent/
 ```
 
 ---
-
-## 💻 Usage
-
-### Basic Query
-
-```python
-from pharmacy_agent import PharmacyAgent
-
-# Initialize the agent
-agent = PharmacyAgent()
-
-# Ask a question
-response = agent.ask("What is ibuprofen used for?")
-print(response)
-```
-
-### Interactive Mode
-
-Run the main script for a demo with example queries:
-
-```bash
-python pharmacy_agent.py
-```
 
 ### Example Questions
 
