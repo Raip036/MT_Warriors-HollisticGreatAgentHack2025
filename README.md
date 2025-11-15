@@ -59,104 +59,21 @@ This agent provides **general pharmaceutical information only**. Always consult 
 
 Start FastAPI from backend folder:
 ```bash
-# From backend folder
+# From backend folder where server.py is
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 
-2. **Front end**
+2. **Front end** in a seperate terminal
 
 ```bash
 cd frontend
- Npx create-next-app@latest
+npx create-next-app@latest
 ```
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-These steps set up the Python virtual environment and install the required packages.
-
-Navigate to the backend folder:
 
 ```bash
-cd backend
-```
-Create a virtual environment:
-
-```bash
-python -m venv venv
-```
-Activate the virtual environment:
-
-On macOS/Linux:
-
-```bash
-source venv/bin/activate
-```
-On Windows (PowerShell):
-
-```bash
-.\venv\Scripts\Activate
-```
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-6. **Frontend**
-
-These steps install the Node.js packages.
-
-In a new terminal, navigate to the frontend folder:
-
-```bash
-cd frontend
-```
-Install dependencies:
-
-```Bash
 npm install
-```
-🏃 Running the Project
-1. Start the Backend Server
-
-Make sure you are in the backend folder and your virtual environment is active.
-
-Run the Uvicorn server:
-
-```Bash
-uvicorn server:app --reload --host 0.0.0.0 --port 8000
-```
-Your backend API will be running at http://localhost:8000
-
-6. **Start the Frontend App
-
-Make sure you are in the frontend folder.
-
-Run the development server:
-
-```Bash
 npm run dev
 ```
-
 ---
 
 ## 📁 Project Structure
