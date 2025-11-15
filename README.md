@@ -74,12 +74,12 @@ This agent provides **general pharmaceutical information only**. Always consult 
 
 5. **Test the connection**
    ```bash
-   python test_api.py
+   python APItest.py
    ```
 
 6. **Run the agent**
    ```bash
-   python pharmacy_agent.py
+   python agent.py
    ```
 
 ---
