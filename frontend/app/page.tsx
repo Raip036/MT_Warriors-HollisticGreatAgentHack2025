@@ -7,6 +7,7 @@ import TraceView from "../components/TraceView";
 import TraceViewer from "../components/TraceViewer";
 import Sidebar from "../components/Sidebar";
 import InsightsPage from "../components/InsightsPage";
+import TracesPage from "../components/TracesPage";
 import { askBackend } from "../utils/api";
 import { useTrace } from "../utils/useTrace";
 
@@ -27,6 +28,7 @@ export default function Home() {
   const [showTrace, setShowTrace] = useState(false);
   const [traceSessionId, setTraceSessionId] = useState<string | null>(null);
   const [showInsights, setShowInsights] = useState(false);
+  const [showTracesPage, setShowTracesPage] = useState(false);
 
   const { trace, loading, error } = useTrace(traceSessionId, showTrace);
 
@@ -246,6 +248,11 @@ export default function Home() {
     return <InsightsPage onBack={() => setShowInsights(false)} />;
   }
 
+  // Show traces page if requested
+  if (showTracesPage) {
+    return <TracesPage messages={messages} onBack={() => setShowTracesPage(false)} />;
+  }
+
   return (
     <div className="h-screen bg-gray-100 flex overflow-hidden">
       {/* Sidebar */}
@@ -258,14 +265,7 @@ export default function Home() {
         currentSessionId={currentSessionId}
         onShowInsights={() => setShowInsights(true)}
         onShowTrace={() => {
-          setShowTrace(!showTrace);
-          // Get the latest session_id from the last message
-          const lastMessage = messages
-            .filter((m) => !m.isUser && m.session_id)
-            .pop();
-          if (lastMessage?.session_id) {
-            setTraceSessionId(lastMessage.session_id);
-          }
+          setShowTracesPage(true);
         }}
         hasMessages={messages.length > 0}
       />
