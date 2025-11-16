@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import ChatBox from "../components/ChatBox";
 import ChatMessage from "../components/ChatMessage";
+import TraceView from "../components/TraceView";
 import { askBackend } from "../utils/api";
 
 export default function Home() {
   const [messages, setMessages] = useState<
-    { text: string; isUser?: boolean }[]
+    { text: string; isUser?: boolean; trace?: any }[]
   >([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -53,7 +54,14 @@ export default function Home() {
       >
         <div className="flex flex-col gap-4">
           {messages.map((m, i) => (
-            <ChatMessage key={i} text={m.text} isUser={m.isUser} />
+            <div key={i} className="flex flex-col">
+              <ChatMessage text={m.text} isUser={m.isUser} />
+              {!m.isUser && m.trace && (
+                <div className="self-start max-w-xl mt-2">
+                  <TraceView trace={m.trace} />
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>
@@ -114,6 +122,7 @@ export default function Home() {
                 {
                   text: data.response ?? data.error ?? "No response from agent.",
                   isUser: false,
+                  trace: data.trace || null,
                 },
               ]);
             }}

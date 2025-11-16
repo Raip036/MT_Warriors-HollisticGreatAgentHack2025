@@ -89,6 +89,11 @@ class Orchestrator:
                     final_answer=final
                 )
                 trace["trace_explanation"] = trace_explanation.model_dump()
+                
+                # Append reasoning explanation
+                reasoning_explanation = trace_explanation.trace_explanation_user_friendly
+                if reasoning_explanation and reasoning_explanation.strip():
+                    final = final + f"\n\n---\n\n💭 Why I'm saying this:\n{reasoning_explanation}"
             except Exception as e:
                 trace["trace_explainer_error"] = str(e)
             
@@ -124,6 +129,11 @@ class Orchestrator:
                     final_answer=fallback
                 )
                 trace["trace_explanation"] = trace_explanation.model_dump()
+                
+                # Append reasoning explanation
+                reasoning_explanation = trace_explanation.trace_explanation_user_friendly
+                if reasoning_explanation and reasoning_explanation.strip():
+                    fallback = fallback + f"\n\n---\n\n💭 What happened:\n{reasoning_explanation}"
             except Exception as e2:
                 trace["trace_explainer_error"] = str(e2)
             
@@ -158,6 +168,11 @@ class Orchestrator:
                     final_answer=backup
                 )
                 trace["trace_explanation"] = trace_explanation.model_dump()
+                
+                # Append reasoning explanation
+                reasoning_explanation = trace_explanation.trace_explanation_user_friendly
+                if reasoning_explanation and reasoning_explanation.strip():
+                    backup = backup + f"\n\n---\n\n💭 What happened:\n{reasoning_explanation}"
             except Exception as e2:
                 trace["trace_explainer_error"] = str(e2)
             
@@ -202,11 +217,21 @@ class Orchestrator:
                 final_answer=final_answer.text
             )
             trace["trace_explanation"] = trace_explanation.model_dump()
+            
+            # Append human-interpretable reasoning explanation to the final answer
+            reasoning_explanation = trace_explanation.trace_explanation_user_friendly
+            if reasoning_explanation and reasoning_explanation.strip():
+                # Format the reasoning explanation nicely
+                formatted_reasoning = f"\n\n---\n\n💭 How I found this information:\n{reasoning_explanation}"
+                final_answer_text = final_answer.text + formatted_reasoning
+            else:
+                final_answer_text = final_answer.text
 
         except Exception as e:
             print(f"❗ Trace Explainer error: {e}")
             trace["trace_explainer_error"] = str(e)
+            final_answer_text = final_answer.text
 
-        # Done! Return answer text and trace (which includes citations)
-        return final_answer.text, trace
+        # Done! Return answer text (with reasoning) and trace (which includes citations)
+        return final_answer_text, trace
 

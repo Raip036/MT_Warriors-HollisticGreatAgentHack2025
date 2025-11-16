@@ -3,7 +3,7 @@ const BACKEND_URL = "http://localhost:8000";
 export async function askBackend(
   question: string,
   onProgress?: (message: string) => void
-): Promise<{ response: string; citations: string[]; error?: string }> {
+): Promise<{ response: string; citations: string[]; trace?: any; error?: string }> {
   return new Promise((resolve, reject) => {
     try {
       // Use fetch with streaming for Server-Sent Events
@@ -45,6 +45,7 @@ export async function askBackend(
                     resolve({
                       response: data.response,
                       citations: data.citations || [],
+                      trace: data.trace || null,
                     });
                     return;
                   } else if (data.type === "error") {
