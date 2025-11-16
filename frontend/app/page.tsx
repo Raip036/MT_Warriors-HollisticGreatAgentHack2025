@@ -8,6 +8,7 @@ import TraceViewer from "../components/TraceViewer";
 import TracePage from "../components/TracePage";
 import Sidebar from "../components/Sidebar";
 import InsightsPage from "../components/InsightsPage";
+import LiveTraceWidget from "../components/LiveTraceWidget";
 import { askBackend } from "../utils/api";
 import { useTrace } from "../utils/useTrace";
 
@@ -29,8 +30,10 @@ export default function Home() {
   const [traceSessionId, setTraceSessionId] = useState<string | null>(null);
   const [showInsights, setShowInsights] = useState(false);
   const [showTracePage, setShowTracePage] = useState(false);
+  const [showLiveTrace, setShowLiveTrace] = useState(false);
   const [selectedTracePrompt, setSelectedTracePrompt] = useState<string>("");
   const [selectedTraceSessionId, setSelectedTraceSessionId] = useState<string>("");
+  const [currentSessionIdForTrace, setCurrentSessionIdForTrace] = useState<string | null>(null);
 
   const { trace, loading, error } = useTrace(traceSessionId, showTrace);
 
@@ -232,8 +235,10 @@ export default function Home() {
       // Update trace session ID if available
       if (data.session_id) {
         setTraceSessionId(data.session_id);
+        setCurrentSessionIdForTrace(data.session_id);
       } else {
         setTraceSessionId(null);
+        setCurrentSessionIdForTrace(null);
       }
 
       // Auto-save after a short delay
@@ -283,6 +288,7 @@ export default function Home() {
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
         currentSessionId={currentSessionId}
+        onShowLiveTrace={() => setShowLiveTrace(!showLiveTrace)}
         onShowInsights={() => setShowInsights(true)}
         onShowTrace={() => {
           // Get the latest message with trace
@@ -305,7 +311,7 @@ export default function Home() {
       <div
         className={`flex-1 transition-all duration-300 overflow-hidden flex ${
           sidebarOpen ? "md:ml-64" : "ml-0"
-        }`}
+        } ${showLiveTrace ? "mr-80" : ""}`}
       >
         <div className="w-full h-full flex flex-col bg-white md:rounded-lg md:m-4 md:shadow-lg md:border md:border-gray-200 md:max-h-[calc(100vh-2rem)]">
           {/* Header */}
@@ -386,6 +392,14 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Live Trace Widget */}
+      {showLiveTrace && (
+        <LiveTraceWidget
+          sessionId={currentSessionIdForTrace}
+          onClose={() => setShowLiveTrace(false)}
+        />
+      )}
     </div>
   );
 }
