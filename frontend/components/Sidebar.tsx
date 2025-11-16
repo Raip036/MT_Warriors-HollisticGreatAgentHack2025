@@ -18,6 +18,7 @@ interface SidebarProps {
   currentSessionId: string | null;
   onShowInsights?: () => void;
   onShowTrace?: () => void;
+  onShowLiveTrace?: () => void;
   hasMessages?: boolean;
 }
 
@@ -30,6 +31,7 @@ export default function Sidebar({
   currentSessionId,
   onShowInsights,
   onShowTrace,
+  onShowLiveTrace,
   hasMessages = false,
 }: SidebarProps) {
   return (
@@ -119,6 +121,15 @@ export default function Sidebar({
 
           {/* Action Buttons */}
           <div className="pt-4 border-t border-gray-300 space-y-2">
+            {onShowLiveTrace && hasMessages && (
+              <button
+                onClick={onShowLiveTrace}
+                className="w-full bg-[#9333ea] text-white py-2 px-4 rounded-lg hover:bg-[#7e22ce] transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <span>⚡</span>
+                <span>Live Trace</span>
+              </button>
+            )}
             {onShowTrace && hasMessages && (
               <button
                 onClick={onShowTrace}

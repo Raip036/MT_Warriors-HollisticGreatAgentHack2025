@@ -11,7 +11,15 @@ from agents.medical_reasoning_agent import MedicalReasoningAgent, MedicalAnswer
 from agents.pharma_miku_agent import PharmaMikuAgent, UserFacingAnswer
 from agents.judge import JudgeAgent, JudgeVerdict
 from agents.trace_explainer import TraceExplainerAgent, TraceExplanation
+from agents.tool_decision_agent import ToolDecisionAgent
 from observability import get_trace_manager, StepType
+from tools import (
+    get_tool_manager,
+    CalculatorTool,
+    DrugInfoTool,
+    ReminderTool,
+    SummarizerTool,
+)
 
 
 # Load .env from backend directory
@@ -37,9 +45,22 @@ class Orchestrator:
         self.agent4 = PharmaMikuAgent()
         self.agent5 = JudgeAgent()
         self.agent6 = TraceExplainerAgent()
+        self.tool_decision_agent = ToolDecisionAgent()
         self.trace_manager = get_trace_manager()
+        self.tool_manager = get_tool_manager()
+        
+        # Register all tools
+        self._register_tools()
 
-        print("✨ Orchestrator initialised (Agent1 → Agent6)")
+        print("✨ Orchestrator initialised (Agent1 → Agent6 + Tool System)")
+    
+    def _register_tools(self):
+        """Register all available tools."""
+        self.tool_manager.register_tool(CalculatorTool())
+        self.tool_manager.register_tool(DrugInfoTool())
+        self.tool_manager.register_tool(ReminderTool())
+        self.tool_manager.register_tool(SummarizerTool())
+        print(f"✅ Registered {len(self.tool_manager.tools)} tools")
 
     # ============================================================
     # MAIN PIPELINE
@@ -166,6 +187,127 @@ class Orchestrator:
             metadata={"agent": "SafetyAdvisor"}
         )
 
+        # ------------------------------------------------------------
+        # 2.5️⃣ TOOL EXECUTION (if needed)
+        # ------------------------------------------------------------
+        tool_results = []
+        tool_context = {}
+        
+        # Decide if tools are needed
+        progress("tool_decision", "pharmamiku is deciding which tools to use")
+        start_time_tool_decision = time.time()
+        
+        self.trace_manager.append_decision(
+            session_id=session_id,
+            input_state={"user_input": user_input, "classification": classification.model_dump()},
+            reasoning="Analyzing user request to determine if any tools should be called",
+            selected_action="decide_tools",
+            metadata={"agent": "ToolDecisionAgent", "step": 2.5}
+        )
+        
+        tool_decision = self.tool_decision_agent.decide_tool(
+            user_input,
+            context={"classification": classification.model_dump(), "safety": safety.model_dump()}
+        )
+        decision_duration_ms = (time.time() - start_time_tool_decision) * 1000
+        
+        self.trace_manager.append_trace(
+            session_id=session_id,
+            step_type=StepType.DECISION,
+            input_data={"user_input": user_input},
+            output_data={
+                "tool_decision": {
+                    "tool_name": tool_decision.tool_name,
+                    "arguments": tool_decision.arguments,
+                    "reasoning": tool_decision.reasoning
+                }
+            },
+            metadata={
+                "agent": "ToolDecisionAgent",
+                "duration_ms": decision_duration_ms,
+                "summary": f"Decided to use tool: {tool_decision.tool_name or 'none'}"
+            }
+        )
+        
+        # Execute tools if needed (can chain multiple tools)
+        if tool_decision.should_use_tool:
+            progress("tool_execution", f"pharmamiku is using {tool_decision.tool_name}")
+            
+            import asyncio
+            # Run async tool execution
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            tool_result = loop.run_until_complete(
+                self.tool_manager.execute_tool(
+                    tool_name=tool_decision.tool_name,
+                    arguments=tool_decision.arguments,
+                    session_id=session_id,
+                    trace_manager=self.trace_manager
+                )
+            )
+            
+            tool_results.append({
+                "tool_name": tool_decision.tool_name,
+                "result": tool_result.output if tool_result.success else None,
+                "error": tool_result.error,
+                "success": tool_result.success
+            })
+            
+            # If tool result contains text that needs summarization, chain summarizer
+            if tool_result.success and tool_decision.tool_name == "drug_info":
+                # Check if user asked for summary
+                if "summarize" in user_input.lower() or "summary" in user_input.lower():
+                    # Extract instructions text
+                    drug_data = tool_result.output.get("data", {})
+                    instructions = drug_data.get("instructions", "")
+                    
+                    if instructions:
+                        progress("tool_execution", "pharmamiku is summarizing the instructions")
+                        summarizer_result = loop.run_until_complete(
+                            self.tool_manager.execute_tool(
+                                tool_name="summarizer",
+                                arguments={
+                                    "text": instructions,
+                                    "max_length": 100,
+                                    "focus": "instructions"
+                                },
+                                session_id=session_id,
+                                trace_manager=self.trace_manager
+                            )
+                        )
+                        
+                        tool_results.append({
+                            "tool_name": "summarizer",
+                            "result": summarizer_result.output if summarizer_result.success else None,
+                            "error": summarizer_result.error,
+                            "success": summarizer_result.success
+                        })
+            
+            # Update state with tool results
+            old_state = current_state.copy()
+            current_state.update({
+                "tool_results": tool_results,
+                "stage": "tools_executed"
+            })
+            self.trace_manager.append_memory_update(
+                session_id=session_id,
+                old_state=old_state,
+                new_state=current_state,
+                cause="tool_execution_results",
+                metadata={"tools_used": [r["tool_name"] for r in tool_results]}
+            )
+            
+            # Add tool results to context for medical reasoning
+            tool_context = {
+                "tool_results": tool_results,
+                "has_tool_data": any(r["success"] for r in tool_results)
+            }
+            trace["tool_results"] = tool_results
+
         # Early stop: only block truly dangerous situations
         # Allow MEDIUM risk questions (like drug interactions) to proceed with warnings
         if safety.risk_level == "high" and safety.needs_handoff:
@@ -254,13 +396,24 @@ class Orchestrator:
         # ------------------------------------------------------------
         try:
             progress("researching", "pharmamiku is researching")
+            
+            # Enhance user input with tool results if available
+            enhanced_input = user_input
+            if tool_context.get("has_tool_data"):
+                tool_summary = "\n\nTool Results:\n"
+                for tool_result in tool_results:
+                    if tool_result["success"]:
+                        tool_summary += f"- {tool_result['tool_name']}: {str(tool_result['result'])[:200]}\n"
+                enhanced_input = user_input + tool_summary
+            
+            start_time_medical = time.time()
             medical_answer: MedicalAnswer = self.agent3.run(
-                user_input=user_input,
+                user_input=enhanced_input,
                 classification=classification,
                 safety=safety,
                 session_id=session_id
             )
-            duration_ms = (time.time() - start_time) * 1000
+            duration_ms = (time.time() - start_time_medical) * 1000
             
             # Log tool call result (medical reasoning includes LLM + Valyu search)
             self.trace_manager.append_trace(
