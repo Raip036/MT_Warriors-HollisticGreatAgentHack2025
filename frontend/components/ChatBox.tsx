@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FiArrowRight } from "react-icons/fi";  // Install: npm install react-icons
 
 interface ChatBoxProps {
   onSend: (message: string) => void;
@@ -18,21 +19,27 @@ export default function ChatBox({ onSend }: ChatBoxProps) {
   };
 
   return (
-    <div className="flex mt-4">
-      <input
-        type="text"
-        className="flex-1 p-3 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Type your question..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyPress}
-      />
+    <div className="flex items-center gap-3 w-full">
+      {/* Input field */}
+      <div className="flex-1 flex items-center bg-[#F3F7FF] border border-gray-300 rounded-full px-6 py-3">
+        <input
+          type="text"
+          className="flex-1 bg-transparent text-[#4D4D4D] placeholder:text-gray-400 focus:outline-none text-lg"
+          placeholder="Hi, I am pharmamiku, how can I help you today?"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyPress}
+        />
+      </div>
+
+      {/* Send button */}
       <button
-        className="bg-blue-500 text-white px-4 rounded-r-lg hover:bg-blue-600"
         onClick={handleSend}
+        className="p-3 rounded-xl border border-gray-400 bg-white hover:bg-[#FFB7D5] transition flex items-center justify-center"
       >
-        Send
+        <FiArrowRight className="text-gray-700 text-2xl" />
       </button>
     </div>
   );
 }
+
