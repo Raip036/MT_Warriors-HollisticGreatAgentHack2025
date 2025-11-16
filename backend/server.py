@@ -9,6 +9,8 @@ from typing import Any
 
 from agents.orchestrator import Orchestrator
 from observability import get_trace_manager, generate_step_summary, TraceAnalyzer
+from utils.cache import get_cached_response, set_cached_response
+import httpx
 
 
 def safe_json_serialize(obj: Any) -> str:
@@ -178,6 +180,14 @@ app.add_middleware(
 orch = Orchestrator()
 
 # -----------------------------
+# HTTP CLIENT WITH CONNECTION POOLING
+# -----------------------------
+http_client = httpx.AsyncClient(
+    timeout=60.0,
+    limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+)
+
+# -----------------------------
 # REQUEST MODEL
 # -----------------------------
 class AskRequest(BaseModel):
@@ -189,6 +199,29 @@ class AskRequest(BaseModel):
 @app.post("/ask")
 async def ask_backend(req: AskRequest):
     import queue
+    from concurrent.futures import ThreadPoolExecutor
+    
+    # Check cache first
+    cached = get_cached_response(req.message)
+    if cached:
+        session_id = str(uuid.uuid4())
+        
+        async def generate_cached():
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'cached', 'message': 'Retrieving cached response...'})}\n\n"
+            await asyncio.sleep(0.1)  # Small delay for UX
+            
+            response_data = {
+                'type': 'complete',
+                'response': cached.get('response', ''),
+                'citations': cached.get('citations', []),
+                'trace': cached.get('trace', {}),
+                'session_id': session_id,
+                'cached': True
+            }
+            yield f"data: {safe_json_serialize(response_data)}\n\n"
+        
+        return StreamingResponse(generate_cached(), media_type="text/event-stream")
+    
     progress_queue = queue.Queue()
     
     # Generate session ID for this request
@@ -198,9 +231,10 @@ async def ask_backend(req: AskRequest):
         progress_queue.put({"type": "progress", "stage": stage, "message": message})
     
     async def generate():
-        import threading
+        # Use ThreadPoolExecutor for better async integration
+        loop = asyncio.get_event_loop()
+        executor = ThreadPoolExecutor(max_workers=1)
         
-        # Start orchestrator in a thread
         result = {"final": None, "trace": None, "error": None, "session_id": session_id}
         
         def run_orchestrator():
@@ -211,19 +245,20 @@ async def ask_backend(req: AskRequest):
             except Exception as e:
                 result["error"] = str(e)
         
-        thread = threading.Thread(target=run_orchestrator)
-        thread.start()
+        # Run orchestrator in thread pool
+        future = loop.run_in_executor(executor, run_orchestrator)
         
-        # Stream progress updates
-        while thread.is_alive():
+        # Stream progress updates while waiting
+        while not future.done():
             try:
                 update = progress_queue.get(timeout=0.1)
                 yield f"data: {json.dumps(update)}\n\n"
             except queue.Empty:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.05)  # Reduced sleep for faster updates
                 continue
         
-        thread.join()
+        # Wait for completion
+        await future
         
         # Send final result
         if result["error"]:
@@ -246,6 +281,17 @@ async def ask_backend(req: AskRequest):
                 'trace': trace_clean,
                 'session_id': session_id
             }
+            
+            # Cache the response
+            set_cached_response(
+                req.message,
+                {
+                    'response': result['final'],
+                    'citations': trace.get('citations', []) if trace else [],
+                    'trace': trace_clean
+                }
+            )
+            
             yield f"data: {safe_json_serialize(response_data)}\n\n"
     
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -254,7 +300,7 @@ async def ask_backend(req: AskRequest):
 # TRACE ENDPOINT
 # -----------------------------
 @app.get("/trace/{session_id}")
-def get_trace(session_id: str):
+async def get_trace(session_id: str):
     """
     Retrieve the full trace for a given session ID.
     Returns the structured trace with all steps, decisions, and tool calls.
@@ -283,7 +329,7 @@ def get_trace(session_id: str):
 # INSIGHTS ENDPOINT
 # -----------------------------
 @app.get("/insights")
-def get_insights(format: str = "json"):
+async def get_insights(format: str = "json"):
     """
     Get behavioral insights from all traces.
     
@@ -304,7 +350,7 @@ def get_insights(format: str = "json"):
     return insights
 
 @app.get("/insights/csv")
-def get_insights_csv():
+async def get_insights_csv():
     """
     Export insights as CSV files for dashboard integration.
     Returns download links or file paths.
@@ -332,5 +378,10 @@ def get_insights_csv():
 # ROOT ENDPOINT
 # -----------------------------
 @app.get("/")
-def root():
+async def root():
     return {"status": "ok", "message": "PharmaMiku backend running"}
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on shutdown."""
+    await http_client.aclose()

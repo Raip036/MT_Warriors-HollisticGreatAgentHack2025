@@ -5,9 +5,9 @@ import ChatBox from "../components/ChatBox";
 import ChatMessage from "../components/ChatMessage";
 import TraceView from "../components/TraceView";
 import TraceViewer from "../components/TraceViewer";
+import TracePage from "../components/TracePage";
 import Sidebar from "../components/Sidebar";
 import InsightsPage from "../components/InsightsPage";
-import TracesPage from "../components/TracesPage";
 import { askBackend } from "../utils/api";
 import { useTrace } from "../utils/useTrace";
 
@@ -28,7 +28,9 @@ export default function Home() {
   const [showTrace, setShowTrace] = useState(false);
   const [traceSessionId, setTraceSessionId] = useState<string | null>(null);
   const [showInsights, setShowInsights] = useState(false);
-  const [showTracesPage, setShowTracesPage] = useState(false);
+  const [showTracePage, setShowTracePage] = useState(false);
+  const [selectedTracePrompt, setSelectedTracePrompt] = useState<string>("");
+  const [selectedTraceSessionId, setSelectedTraceSessionId] = useState<string>("");
 
   const { trace, loading, error } = useTrace(traceSessionId, showTrace);
 
@@ -60,12 +62,20 @@ export default function Home() {
     }
   }, [chatSessions]);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom smoothly when new message arrives
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current && messages.length > 0) {
+      // Smooth scroll to bottom to show the newest message
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTo({
+            top: scrollRef.current.scrollHeight,
+            behavior: "smooth",
+          });
+        }
+      }, 100);
     }
-  }, [messages]);
+  }, [messages.length]);
 
   // Generate session title from first user message
   const generateSessionTitle = (firstMessage: string): string => {
@@ -184,12 +194,12 @@ export default function Home() {
       setCurrentSessionId(newSessionId);
     }
 
-    // Add user message
+    // Add user message immediately
     setMessages((prev) => [...prev, { text: msg, isUser: true }]);
 
-    // Add typing indicator
+    // Add typing indicator IMMEDIATELY for instant feedback
     const typingMessage = {
-      text: "pharmamiku is identifying the problem",
+      text: "pharmamiku is thinking...",
       isUser: false,
       isTyping: true,
     };
@@ -198,7 +208,7 @@ export default function Home() {
 
     try {
       const data = await askBackend(msg, (progressMessage) => {
-        // Update the typing message with progress
+        // Update the typing message with progress in real-time
         setMessages((prev) =>
           prev.map((m) =>
             m.isTyping ? { ...m, text: progressMessage } : m
@@ -248,9 +258,19 @@ export default function Home() {
     return <InsightsPage onBack={() => setShowInsights(false)} />;
   }
 
-  // Show traces page if requested
-  if (showTracesPage) {
-    return <TracesPage messages={messages} onBack={() => setShowTracesPage(false)} />;
+  // Show trace page if requested
+  if (showTracePage && selectedTraceSessionId) {
+    return (
+      <TracePage
+        sessionId={selectedTraceSessionId}
+        prompt={selectedTracePrompt}
+        onBack={() => {
+          setShowTracePage(false);
+          setSelectedTraceSessionId("");
+          setSelectedTracePrompt("");
+        }}
+      />
+    );
   }
 
   return (
@@ -265,7 +285,18 @@ export default function Home() {
         currentSessionId={currentSessionId}
         onShowInsights={() => setShowInsights(true)}
         onShowTrace={() => {
-          setShowTracesPage(true);
+          // Get the latest message with trace
+          const lastMessage = messages
+            .filter((m) => !m.isUser && m.session_id)
+            .pop();
+          if (lastMessage?.session_id) {
+            // Find the user prompt that preceded this response
+            const messageIndex = messages.findIndex((m) => m === lastMessage);
+            const userPrompt = messageIndex > 0 ? messages[messageIndex - 1]?.text : "Unknown prompt";
+            setSelectedTracePrompt(userPrompt);
+            setSelectedTraceSessionId(lastMessage.session_id);
+            setShowTracePage(true);
+          }
         }}
         hasMessages={messages.length > 0}
       />
@@ -306,30 +337,49 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {messages.map((m, i) => (
-                  <div key={i} className="flex flex-col">
-                    <ChatMessage text={m.text} isUser={m.isUser} isTyping={m.isTyping} />
-                    {!m.isUser && !m.isTyping && m.trace && (
-                      <div className="self-start max-w-xl mt-2">
-                        <TraceView trace={m.trace} />
-                      </div>
-                    )}
-                  </div>
-                ))}
-                
-                {/* Trace Viewer */}
-                {showTrace && (
-                  <div className="mt-4 w-full">
-                    <TraceViewer trace={trace} loading={loading} error={error} />
-                  </div>
-                )}
+                {messages.map((m, i) => {
+                  // Find the user prompt for this message
+                  const userPrompt = i > 0 && messages[i - 1]?.isUser 
+                    ? messages[i - 1].text 
+                    : "";
+                  
+                  return (
+                    <div key={i} className="flex flex-col">
+                      <ChatMessage text={m.text} isUser={m.isUser} isTyping={m.isTyping} />
+                      {!m.isUser && !m.isTyping && m.session_id && (
+                        <button
+                          onClick={() => {
+                            setSelectedTracePrompt(userPrompt || "Unknown prompt");
+                            setSelectedTraceSessionId(m.session_id!);
+                            setShowTracePage(true);
+                          }}
+                          className="self-start mt-2 px-3 py-1.5 bg-[#39C5BB]/10 text-[#39C5BB] rounded-lg hover:bg-[#39C5BB]/20 transition-colors text-xs font-medium flex items-center gap-2"
+                        >
+                          <span>🔍</span>
+                          <span>View Full Trace</span>
+                        </button>
+                      )}
+                      {!m.isUser && !m.isTyping && m.trace && (
+                        <div className="self-start max-w-xl mt-2">
+                          <TraceView trace={m.trace} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Input Area */}
           <div className="border-t border-gray-100 p-4">
-            <ChatBox onSend={handleSend} />
+            <ChatBox 
+              onSend={handleSend}
+              onTyping={() => {
+                // Show immediate feedback that user is typing
+                // This creates a more responsive feel
+              }}
+            />
             <p className="text-xs text-gray-400 text-center mt-2">
               Not medical advice.
             </p>
