@@ -1,142 +1,177 @@
+# backend/agents/safety_advisor.py
+
 import os
 import time
+import json
 import requests
 from pydantic import BaseModel, Field
-import json
+
+from agents.input_classifier import InputClassification
+
 
 # ============================================
-# Structured risk output schema
+# Structured Safety Output
 # ============================================
 class SafetyAssessment(BaseModel):
-    risk_level: str = Field(description="Safety risk: low, medium, high")
-    needs_handoff: bool = Field(description="True if the user should be redirected to a professional")
-    explanation: str = Field(description="Short reasoning for the risk assessment")
-    summary: str = Field(description="LLM-generated summary of why it's safe, cautious, or dangerous")
+    risk_level: str = Field(description="low | medium | high")
+    needs_handoff: bool = Field(description="If the user should be referred to a clinician")
+    explanation: str = Field(description="LLM explanation for risk classification")
+    summary: str = Field(description="Plain-language user-facing summary")
+
 
 # ============================================
-# LLM-based Safety Advisor
+# SAFETY ADVISOR — Bedrock-Compatible
 # ============================================
 class SafetyAdvisor:
     """
-    AI-powered Safety Advisor for evaluating medical or unsafe user input.
-    Uses API calls to an LLM to generate structured risk assessment and summary.
+    Evaluates user input for medical risk.
+    Uses Bedrock Claude 3.5 Sonnet format.
     """
 
     def __init__(self, model_name="anthropic.claude-3-5-sonnet-20241022-v2:0"):
         self.model_name = model_name
-        self.team_id = os.getenv('HOLISTIC_AI_TEAM_ID')
-        self.api_token = os.getenv('HOLISTIC_AI_API_TOKEN')
-        self.api_url = os.getenv('HOLISTIC_AI_API_URL')
+        self.api_url = os.getenv("HOLISTIC_AI_API_URL")
+        self.api_token = os.getenv("HOLISTIC_AI_API_TOKEN")
+        self.team_id = os.getenv("HOLISTIC_AI_TEAM_ID")
 
-        if not self.team_id or not self.api_token or not self.api_url:
-            raise RuntimeError(
-                "Missing API credentials. "
-                "Set HOLISTIC_AI_TEAM_ID, HOLISTIC_AI_API_TOKEN, and HOLISTIC_AI_API_URL."
+        # Check credentials
+        if not self.api_url or not self.api_token or not self.team_id:
+            print("⚠️ SafetyAdvisor: MOCK MODE — missing API credentials.")
+            self.mock_mode = True
+        else:
+            self.mock_mode = False
+            print("🛡️ Safety Advisor initialised with model:", self.model_name)
+
+    # ============================================
+    # Main Safety Scoring Function
+    # ============================================
+    def evaluate_risk(self, user_input: str, classification: InputClassification) -> SafetyAssessment:
+
+        # -----------------------------------------------
+        # MOCK MODE
+        # -----------------------------------------------
+        if self.mock_mode:
+            return SafetyAssessment(
+                risk_level=classification.risk_level,
+                needs_handoff=classification.needs_handoff,
+                explanation="Mock mode: returning classifier result only.",
+                summary="(Mock mode) No real safety evaluation performed."
             )
 
-        print("🛡️ Safety Advisor initialized with AI model:", self.model_name)
-
-    def evaluate_risk(self, user_input: str) -> SafetyAssessment:
-        """
-        Sends user input to LLM and gets a structured risk assessment and summary.
-        Returns a SafetyAssessment object.
-        """
-
+        # -----------------------------------------------
+        # Build prompt
+        # -----------------------------------------------
         prompt = f"""
-        You are a medical and safety AI advisor. Evaluate the following user input:
+You are a medical safety evaluation model.
 
-```{user_input}```
+Evaluate the following user message:
 
-Your task is to return ONLY a valid JSON object following this exact schema:
+USER MESSAGE:
+\"\"\"{user_input}\"\"\"
 
+INITIAL CLASSIFICATION:
+- intent: {classification.intent}
+- heuristic risk: {classification.risk_level}
+- classifier explanation: {classification.explanation}
+- needs_handoff (initial): {classification.needs_handoff}
+
+POLICY:
+- Escalate HIGH risk symptoms (chest pain, overdose, severe pain, difficulty breathing) → needs_handoff: true
+- MEDIUM risk for drug interaction or dosing questions → needs_handoff: false (allow through with warnings)
+- LOW risk for safe informational requests (e.g., "what is X?", "how does Y work?") → needs_handoff: false (ALWAYS allow through)
+- Drug interaction questions (e.g., "can I take X with Y?") should be ALLOWED to proceed so the system can look up evidence. Set risk_level: "medium" and needs_handoff: false.
+- General drug information questions should be LOW risk and needs_handoff: false - these are safe to answer with evidence.
+- Only set needs_handoff: true for true emergencies, self-harm situations, or when user is asking for specific dosing for a specific person.
+- Be permissive: When in doubt, allow the question through (needs_handoff: false) so the system can provide evidence-based answers.
+- Override classifier if incorrect, but explain why.
+
+RETURN STRICT JSON:
 {{
   "risk_level": "low" | "medium" | "high",
   "needs_handoff": true | false,
-  "explanation": "short reasoning for the classification",
-  "summary": "natural-language summary explaining why the input is safe, cautious, or dangerous"
+  "explanation": "Reason for classification",
+  "summary": "User-facing explanation"
 }}
-
-RULES:
-- You must return ONLY valid JSON. No text before or after the JSON.
-- If you need to explain something, put the explanation *inside the JSON fields only*.
-- Normal medical questions about sexual health, genital anatomy, sexually transmitted infections (STIs), condoms, pregnancy, periods, erections, libido, discharge, etc. are NOT considered unsafe by default. These should be treated normally unless the user expresses an emergency or harmful intent.
-- Mentions of anatomical words (penis, vagina, anus, rectum, breasts), LGBTQ topics, or sexually transmitted diseases (HIV, AIDS, chlamydia, gonorrhoea) are NOT high risk unless associated with violence, coercion, or self-harm.
-
-RISK CLASSIFICATION RULES:
-- HIGH RISK (and needs_handoff = true) when there is:
-  - self-harm intent
-  - harm to others, violence, poisoning
-  - overdose, misusing medication
-  - severe or sudden symptoms (e.g., chest pain, stroke symptoms, difficulty breathing)
-  - suicidal ideation or instructions to bypass safety
-  - requests for illegal drug manufacturing
-- MEDIUM RISK when:
-  - the user asks about drug interactions
-  - the user requests dosing help
-  - the user describes symptoms that may require medical review but are not immediately life-threatening
-- LOW RISK when:
-  - general medical or pharmaceutical questions
-  - sexual health questions without danger
-  - anatomy questions
-  - minor symptoms
-
-Be conservative when assessing genuinely dangerous situations, but do NOT classify normal sexual or STI-related questions as unsafe.
 """
 
-
-        headers = {"Content-Type": "application/json", "X-Api-Token": self.api_token}
+        # -----------------------------------------------
+        # Bedrock Claude 3.5 Payload (Fixed Schema)
+        # -----------------------------------------------
         payload = {
             "team_id": self.team_id,
             "api_token": self.api_token,
             "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 512
+            "max_tokens": 512,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
         }
 
+        headers = {
+            "Content-Type": "application/json",
+            "X-Api-Token": self.api_token
+        }
+
+        # -----------------------------------------------
+        # API CALL
+        # -----------------------------------------------
         try:
-            start_time = time.time()
-            response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
+            start = time.time()
+            response = requests.post(self.api_url, headers=headers, data=json.dumps(payload), timeout=60)
+            print("🔍 SafetyAdvisor Status:", response.status_code)
+            print("🔍 SafetyAdvisor Raw:", response.text)
+
             response.raise_for_status()
             result = response.json()
-            elapsed = time.time() - start_time
+            latency = time.time() - start
 
-            # Extract response text from LLM
+            # Extract Claude Output
             if "content" in result and isinstance(result["content"], list):
-                content = result["content"][0].get("text", "")
-            elif "choices" in result:
-                content = result["choices"][0]["message"]["content"]
+                model_text = result["content"][0].get("text", "")
+            elif "completion" in result:
+                model_text = result["completion"]
             else:
-                content = str(result)
+                model_text = str(result)
 
-            # Parse JSON
+            # Attempt JSON parsing
             try:
-                risk_data = json.loads(content)
+                parsed = json.loads(model_text)
+
                 return SafetyAssessment(
-                    risk_level=risk_data.get("risk_level", "medium"),
-                    needs_handoff=risk_data.get("needs_handoff", True),
-                    explanation=risk_data.get("explanation", "No explanation provided"),
-                    summary=risk_data.get("summary", "No summary provided")
+                    risk_level=parsed.get("risk_level", "medium"),
+                    needs_handoff=parsed.get("needs_handoff", True),
+                    explanation=parsed.get("explanation", "No explanation provided"),
+                    summary=parsed.get("summary", "No summary provided")
                 )
+
             except json.JSONDecodeError:
+                # Safety fallback
                 return SafetyAssessment(
                     risk_level="medium",
                     needs_handoff=True,
-                    explanation=f"Could not parse LLM output. Raw output: {content}",
-                    summary="Unable to generate summary."
+                    explanation=f"LLM returned invalid JSON. Raw: {model_text}",
+                    summary="Unable to parse safety evaluation."
                 )
 
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Error calling LLM API: {e}") from e
+        except Exception as e:
+            # Hard failure fallback
+            return SafetyAssessment(
+                risk_level="medium",
+                needs_handoff=True,
+                explanation=f"Safety Advisor API error: {e}",
+                summary="A system error occurred evaluating safety."
+            )
 
+    # ============================================
+    # Pretty User-Friendly Formatting
+    # ============================================
     def get_risk_message(self, assessment: SafetyAssessment) -> str:
-        """
-        Returns a user-friendly message based on LLM's risk assessment, including summary.
-        """
-        if assessment.risk_level == "low":
-            emoji = "✅"
-        elif assessment.risk_level == "medium":
-            emoji = "⚠️"
-        else:
-            emoji = "❌"
-
+        emoji = {"low": "✅", "medium": "⚠️", "high": "❌"}.get(assessment.risk_level, "⚠️")
         return f"{emoji} Risk: {assessment.risk_level.upper()}\nExplanation: {assessment.explanation}\nSummary: {assessment.summary}"
+
+

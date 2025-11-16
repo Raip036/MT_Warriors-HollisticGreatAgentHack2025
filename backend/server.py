@@ -1,75 +1,86 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from agents.input_classifier import InputClassifier
-from agents.safety_advisor import SafetyAdvisor
-from agents.agent import PharmacyAgent, load_environment
+from fastapi.middleware.cors import CORSMiddleware
+import json
+import asyncio
 
+from agents.orchestrator import Orchestrator
 
-# ---------------------------
-# FastAPI setup
-# ---------------------------
+# -----------------------------
+# FASTAPI SETUP
+# -----------------------------
 app = FastAPI()
 
-# Enable CORS for your frontend
-origins = [
-    "http://localhost:3000",  # Next.js dev server
-    "http://127.0.0.1:3000",
-]
-
+# Allow frontend (Next.js) to call backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],   # you can restrict later
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------------------------
-# Initialize agents
-# ---------------------------
-if not load_environment():
-    raise RuntimeError("❌ Missing environment variables")
+# -----------------------------
+# INITIALISE ORCHESTRATOR
+# -----------------------------
+orch = Orchestrator()
 
-classifier = InputClassifier()
-safety = SafetyAdvisor()
-pharmacy = PharmacyAgent()
+# -----------------------------
+# REQUEST MODEL
+# -----------------------------
+class AskRequest(BaseModel):
+    message: str
 
-# ---------------------------
-# Request model
-# ---------------------------
-class ChatRequest(BaseModel):
-    text: str
-
-# ---------------------------
-# Chat endpoint
-# ---------------------------
+# -----------------------------
+# ENDPOINT: /ask (with SSE progress updates)
+# -----------------------------
 @app.post("/ask")
-async def ask(request: ChatRequest):
-    user_input = request.text.strip()
-    if not user_input:
-        raise HTTPException(status_code=400, detail="Empty input")
+async def ask_backend(req: AskRequest):
+    import queue
+    progress_queue = queue.Queue()
+    
+    def progress_callback(stage: str, message: str):
+        progress_queue.put({"type": "progress", "stage": stage, "message": message})
+    
+    async def generate():
+        import threading
+        
+        # Start orchestrator in a thread
+        result = {"final": None, "trace": None, "error": None}
+        
+        def run_orchestrator():
+            try:
+                final, trace = orch.run_with_progress(req.message, progress_callback)
+                result["final"] = final
+                result["trace"] = trace
+            except Exception as e:
+                result["error"] = str(e)
+        
+        thread = threading.Thread(target=run_orchestrator)
+        thread.start()
+        
+        # Stream progress updates
+        while thread.is_alive():
+            try:
+                update = progress_queue.get(timeout=0.1)
+                yield f"data: {json.dumps(update)}\n\n"
+            except queue.Empty:
+                await asyncio.sleep(0.1)
+                continue
+        
+        thread.join()
+        
+        # Send final result
+        if result["error"]:
+            yield f"data: {json.dumps({'type': 'error', 'error': result['error']})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'complete', 'response': result['final'], 'citations': result['trace'].get('citations', []), 'trace': result['trace']})}\n\n"
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
-    # Step 1: Classify input
-    classification = classifier.classify_input(user_input)
-
-    # Step 2: Safety check via LLM
-    assessment = safety.evaluate_risk(user_input)
-
-    # Step 3: Decide if we proceed
-    if assessment.risk_level.lower() == "high":
-        # Optional: you can still check if this is allowed
-        return {
-            "error": "High risk input. Cannot provide pharmacy advice.",
-            "assessment": assessment.dict()
-        }
-
-    # Step 4: Generate response via PharmacyAgent
-    response = pharmacy.ask(user_input)
-
-    return {
-        "user_input": user_input,
-        "classification": classification.dict(),
-        "assessment": assessment.dict(),
-        "response": response
-    }
+# -----------------------------
+# ROOT ENDPOINT
+# -----------------------------
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "PharmaMiku backend running"}
