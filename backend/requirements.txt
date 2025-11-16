@@ -1,0 +1,45 @@
+# ============================================
+# PharmaMiku Backend Dependencies
+# ============================================
+
+# Web Framework & Server
+fastapi==0.115.2
+uvicorn[standard]==0.23.2
+
+# Data Validation & Models (used extensively for Pydantic BaseModel)
+pydantic==2.12.4
+pydantic_core==2.41.5
+annotated-types==0.7.0
+typing_extensions==4.15.0
+
+# HTTP Client (for API calls to Bedrock and Valyu)
+requests==2.32.5
+urllib3==2.5.0
+certifi==2025.11.12
+charset-normalizer==3.4.4
+idna==3.11
+
+# Environment Variable Management
+python-dotenv==1.2.1
+
+# FastAPI/Starlette Core Dependencies
+anyio==4.11.0
+sniffio==1.3.1
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+
+# Utilities
+packaging==25.0
+
+# ============================================
+# Optional Dependencies
+# ============================================
+
+# Valyu - Medical evidence search API
+# Uncomment and install if using Valyu for evidence retrieval:
+# valyu
+
+# Note: Additional transitive dependencies will be installed automatically
+# when you run: pip install -r requirements.txt
+

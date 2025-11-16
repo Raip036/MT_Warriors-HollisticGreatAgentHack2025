@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { FiX, FiFilter, FiRefreshCw } from "react-icons/fi";
 
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 interface TraceStep {
   step_id: number;
