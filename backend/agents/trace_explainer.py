@@ -73,7 +73,7 @@ Focus on the reasoning flow and decision points.
 
         # Build user-friendly explanation prompt
         user_friendly_prompt = f"""
-You are explaining how a pharmacy assistant answered a question, in simple language.
+You are explaining how a pharmacy assistant answered a question, in simple language that anyone can understand.
 
 USER QUESTION:
 "{user_message}"
@@ -84,16 +84,34 @@ FINAL ANSWER:
 TRACE SUMMARY:
 {self._format_trace_summary(trace)}
 
-Generate a simple, friendly explanation that describes:
-- What the assistant did step-by-step
-- Why certain safety checks were made
-- How trusted sources were used
-- What the final answer is based on
+Generate a simple, friendly explanation that describes HOW I found this answer, written for someone who:
+- Is not familiar with AI or technology
+- Is not a medical professional
+- Just wants to understand how I arrived at this information
 
-Write as if explaining to a curious user (could be a child, teen, or adult).
-Use simple language. Avoid technical jargon.
-Do NOT mention "agents", "LLM", "API calls", or technical implementation details.
-Instead, say things like "I checked if your question was safe", "I looked up trusted medicine sources", etc.
+IMPORTANT GUIDELINES:
+1. Use everyday language - like explaining to a friend or family member
+2. Use analogies when helpful (e.g., "like checking a library" instead of "searching a database")
+3. Explain WHY I did each step, not just WHAT I did
+4. Make it feel personal and conversational (use "I" and "you")
+5. Keep it brief (2-4 sentences max) but meaningful
+
+FORBIDDEN WORDS/PHRASES (never use these):
+- "AI", "artificial intelligence", "machine learning", "LLM", "model"
+- "API", "endpoint", "system", "pipeline", "agent", "algorithm"
+- "Bedrock", "Claude", "Valyu" (brand names)
+- "technical", "computational", "processing"
+- "data", "dataset", "database" (use "sources" or "information" instead)
+
+APPROVED LANGUAGE (use these instead):
+- "I looked up information" instead of "I queried a database"
+- "trusted medical sources" instead of "evidence base"
+- "I made sure it was safe" instead of "I performed a safety evaluation"
+- "I double-checked" instead of "I ran a validation check"
+- "I explained it simply" instead of "I applied a persona layer"
+
+Write the explanation as if I'm telling the user directly, like:
+"I wanted to make sure I gave you the right information, so I first checked if your question was something I could safely answer. Then I looked up what trusted medical sources say about this topic. After finding reliable information, I made sure to explain it in a way that's easy to understand, and I double-checked that everything was safe and accurate before sharing it with you."
 """
 
         # Generate explanations
@@ -143,9 +161,11 @@ Instead, say things like "I checked if your question was safe", "I looked up tru
             )
         else:
             return (
-                "I checked if your question was safe to answer, looked up information "
-                "from trusted medicine sources, and then explained it in a way that's "
-                "easy to understand. I also made sure to include important safety reminders."
+                "I wanted to make sure I gave you the right information, so I first checked "
+                "if your question was something I could safely answer. Then I looked up what "
+                "trusted medical sources say about this topic. After finding reliable information, "
+                "I made sure to explain it in a way that's easy to understand, and I double-checked "
+                "that everything was safe and accurate before sharing it with you."
             )
 
     def _format_trace_for_llm(self, trace: Dict[str, Any]) -> str:
@@ -177,63 +197,134 @@ Instead, say things like "I checked if your question was safe", "I looked up tru
 
         if "input_classifier" in trace:
             cls = trace["input_classifier"]
-            summary_parts.append(
-                f"Intent: {cls.get('intent', 'unknown')}, "
-                f"Risk: {cls.get('risk_level', 'unknown')}"
-            )
+            intent = cls.get('intent', 'unknown')
+            risk = cls.get('risk_level', 'unknown')
+            # Convert to user-friendly language
+            intent_map = {
+                'drug_info': 'asking about a medication',
+                'drug_interaction': 'asking about mixing medications',
+                'dosage': 'asking about how much to take',
+                'side_effects': 'asking about side effects',
+                'general': 'asking a general question'
+            }
+            friendly_intent = intent_map.get(intent, intent)
+            summary_parts.append(f"Your question was about {friendly_intent}")
 
         if "safety_advisor" in trace:
             safety = trace["safety_advisor"]
-            summary_parts.append(
-                f"Safety check: {safety.get('risk_level', 'unknown')} risk"
-            )
+            risk_level = safety.get('risk_level', 'unknown')
+            if risk_level == 'low':
+                summary_parts.append("I determined this was a safe question to answer")
+            elif risk_level == 'medium':
+                summary_parts.append("I noted this question needs some caution")
+            else:
+                summary_parts.append("I checked the safety of answering this")
 
         if "medical_reasoning" in trace:
-            summary_parts.append("Consulted trusted medical sources")
+            med = trace["medical_reasoning"]
+            citation_count = len(med.get("citations", []))
+            if citation_count > 0:
+                summary_parts.append(f"I found information from {citation_count} trusted medical source(s)")
+            else:
+                summary_parts.append("I looked up information from trusted medical sources")
 
         if "pharma_miku" in trace:
-            summary_parts.append("Adapted answer for user")
+            summary_parts.append("I explained it in simple, easy-to-understand language")
 
         if "judge" in trace:
-            summary_parts.append("Final safety check completed")
+            judge = trace["judge"]
+            verdict = judge.get("verdict", "unknown")
+            if verdict == "SAFE":
+                summary_parts.append("I double-checked everything to make sure it was safe and accurate")
 
-        return " | ".join(summary_parts) if summary_parts else "Processed through safety and reasoning pipeline"
+        return " | ".join(summary_parts) if summary_parts else "I processed your question through safety checks and looked up trusted information"
 
     def _build_trace_summary(self, trace: Dict[str, Any]) -> Dict[str, Any]:
-        """Builds a structured summary of key steps."""
+        """Builds a structured summary of key steps for complete traceability."""
         summary = {
             "steps": [],
+            "execution_path": [],
             "risk_level": "unknown",
             "safety_decision": "unknown",
             "sources_used": False,
+            "citation_count": 0,
         }
 
-        # Extract key information
+        # Build detailed execution path for traceability
+        execution_path = []
+
+        # Step 1: Input Classification
         if "input_classifier" in trace:
             cls = trace["input_classifier"]
             summary["steps"].append("Input Classification")
             summary["risk_level"] = cls.get("risk_level", "unknown")
             summary["age_group"] = cls.get("age_group", "unknown")
+            execution_path.append({
+                "step": 1,
+                "name": "Input Classification",
+                "status": "completed",
+                "intent": cls.get("intent", "unknown"),
+                "risk_level": cls.get("risk_level", "unknown"),
+                "explanation": cls.get("explanation", ""),
+            })
 
+        # Step 2: Safety Evaluation
         if "safety_advisor" in trace:
             safety = trace["safety_advisor"]
             summary["steps"].append("Safety Evaluation")
             summary["safety_decision"] = safety.get("risk_level", "unknown")
             summary["needs_handoff"] = safety.get("needs_handoff", False)
+            execution_path.append({
+                "step": 2,
+                "name": "Safety Evaluation",
+                "status": "completed",
+                "risk_level": safety.get("risk_level", "unknown"),
+                "needs_handoff": safety.get("needs_handoff", False),
+                "explanation": safety.get("explanation", ""),
+                "summary": safety.get("summary", ""),
+            })
 
+        # Step 3: Medical Reasoning
         if "medical_reasoning" in trace:
             summary["steps"].append("Medical Reasoning")
             med = trace["medical_reasoning"]
-            summary["sources_used"] = len(med.get("citations", [])) > 0
-            summary["citation_count"] = len(med.get("citations", []))
+            citation_count = len(med.get("citations", []))
+            summary["sources_used"] = citation_count > 0
+            summary["citation_count"] = citation_count
+            execution_path.append({
+                "step": 3,
+                "name": "Medical Reasoning",
+                "status": "completed",
+                "citations": med.get("citations", []),
+                "citation_count": citation_count,
+                "has_evidence": citation_count > 0,
+            })
 
+        # Step 4: Persona Adaptation
         if "pharma_miku" in trace:
             summary["steps"].append("Persona Adaptation")
+            pharma = trace["pharma_miku"]
+            execution_path.append({
+                "step": 4,
+                "name": "Persona Adaptation",
+                "status": "completed",
+                "age_group": pharma.get("age_group", "unknown"),
+                "tone": pharma.get("tone", ""),
+            })
 
+        # Step 5: Final Safety Check (Judge)
         if "judge" in trace:
             summary["steps"].append("Final Safety Check")
             judge = trace["judge"]
             summary["judge_verdict"] = judge.get("verdict", "unknown")
+            execution_path.append({
+                "step": 5,
+                "name": "Final Safety Check",
+                "status": "completed",
+                "verdict": judge.get("verdict", "unknown"),
+                "notes": judge.get("notes", ""),
+            })
 
+        summary["execution_path"] = execution_path
         return summary
 
