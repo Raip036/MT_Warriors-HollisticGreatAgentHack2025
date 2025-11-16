@@ -188,8 +188,9 @@ If verdict is SAFE: Leave adjusted_answer as empty string.
                 notes="High risk situation but missing strong safety warnings.",
                 adjusted_answer=(
                     user_facing_answer.text
-                    + "\n\n⚠️ IMPORTANT: This may be a serious medical situation. "
-                    "Please seek professional medical help immediately."
+                    + "\n\n💊 Hey! I want to make sure you're safe - this sounds really important. "
+                    "Please talk to a doctor, pharmacist, or call emergency services right away if you need immediate help. "
+                    "They're the experts who can give you the best care! ✨"
                 ),
             )
 

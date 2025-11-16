@@ -12,6 +12,11 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "pharmamiku - Your AI Pharma Assistant",
   description: "pharmacy chatbot ui",
+  icons: {
+    icon: "/pharmamiku_thinking.png",
+    shortcut: "/pharmamiku_thinking.png",
+    apple: "/pharmamiku_thinking.png",
+  },
 };
 
 export default function RootLayout({

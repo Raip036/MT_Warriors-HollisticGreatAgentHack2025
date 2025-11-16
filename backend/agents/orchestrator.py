@@ -55,7 +55,7 @@ class Orchestrator:
         # ------------------------------------------------------------
         # 1️⃣ INPUT CLASSIFIER
         # ------------------------------------------------------------
-        progress("classifying", "pharmamiku is identifying the problem…")
+        progress("classifying", "pharmamiku is identifying the problem")
         classification = self.agent1.classify_input(user_input)
         trace["input_classifier"] = classification.model_dump()
         age_group = classification.age_group if hasattr(classification, "age_group") else "unknown"
@@ -63,7 +63,7 @@ class Orchestrator:
         # ------------------------------------------------------------
         # 2️⃣ SAFETY EVALUATION
         # ------------------------------------------------------------
-        progress("safety", "pharmamiku is assessing safety…")
+        progress("safety", "pharmamiku is assessing safety")
         safety = self.agent2.evaluate_risk(
             user_input=user_input,
             classification=classification
@@ -73,10 +73,11 @@ class Orchestrator:
         # Early stop: only block truly dangerous situations
         # Allow MEDIUM risk questions (like drug interactions) to proceed with warnings
         if safety.risk_level == "high" and safety.needs_handoff:
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             final = (
-                "⚠️ This may be a serious medical situation. "
-                "Please seek professional medical help immediately."
+                "💊 Hey there! I'm really concerned about what you've shared. "
+                "This sounds like something that needs immediate attention from a healthcare professional. "
+                "Please reach out to a doctor, pharmacist, or emergency services right away - they're the best people to help you with this! ✨"
             )
             trace["final_answer"] = final
             trace["safety_decision"] = "BLOCK"
@@ -103,7 +104,7 @@ class Orchestrator:
         # 3️⃣ MEDICAL REASONING AGENT
         # ------------------------------------------------------------
         try:
-            progress("researching", "pharmamiku is researching…")
+            progress("researching", "pharmamiku is researching")
             medical_answer: MedicalAnswer = self.agent3.run(
                 user_input=user_input,
                 classification=classification,
@@ -113,7 +114,7 @@ class Orchestrator:
 
         except Exception as e:
             # Fail-safe: If Bedrock OR Valyu crashes
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             fallback = (
                 "⚠️ I had trouble generating a full medical explanation. "
                 "Please consult a pharmacist or healthcare provider for accurate guidance."
@@ -143,7 +144,7 @@ class Orchestrator:
         # 4️⃣ PHARMA MIKU PERSONA LAYER
         # ------------------------------------------------------------
         try:
-            progress("thinking", "pharmamiku is thinking…")
+            progress("thinking", "pharmamiku is thinking")
             user_facing_answer = self.agent4.run(
                 user_input=user_input,
                 medical_answer=medical_answer,
@@ -153,7 +154,7 @@ class Orchestrator:
             trace["pharma_miku"] = user_facing_answer.model_dump()
 
         except Exception as e:
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             backup = (
                 "Here is the medical information, but I could not apply the persona layer."
             )
@@ -182,7 +183,7 @@ class Orchestrator:
         # 5️⃣ JUDGE AGENT (Final Safety & Quality Check)
         # ------------------------------------------------------------
         try:
-            progress("judging", "pharmamiku is judging…")
+            progress("judging", "pharmamiku is judging")
             judge_verdict = self.agent5.evaluate(
                 user_message=user_input,
                 user_facing_answer=user_facing_answer,
@@ -210,7 +211,7 @@ class Orchestrator:
         # 6️⃣ TRACE EXPLAINER (Glass Box Reasoning)
         # ------------------------------------------------------------
         try:
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             trace_explanation = self.agent6.explain(
                 trace=trace,
                 user_message=user_input,
