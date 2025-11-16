@@ -230,6 +230,123 @@ class TraceAnalyzer:
         
         return errors
 
+    def analyze_failures(self, trace: Dict) -> Dict[str, Any]:
+        """
+        Perform root cause analysis of failures in a trace.
+        
+        Returns:
+            Dictionary with failure analysis including root causes and recommendations
+        """
+        failures = []
+        steps = trace.get("steps", [])
+        
+        for step in steps:
+            if not step.get("success", True):
+                step_id = step.get("step_id")
+                step_type = step.get("type", "unknown")
+                error = step.get("error", "Unknown error")
+                tool_name = step.get("tool_name")
+                timestamp = step.get("timestamp")
+                
+                # Determine root cause
+                root_cause = "unknown"
+                derived_from_step_id = None
+                
+                if step_type == "tool_call" and tool_name:
+                    root_cause = f"tool:{tool_name}"
+                elif step_type == "decision":
+                    root_cause = "llm"
+                    # Check if this decision step failed due to a previous tool failure
+                    # Look at previous steps to find potential upstream failures
+                    for prev_step in steps:
+                        if prev_step.get("step_id", 0) < step_id and not prev_step.get("success", True):
+                            if prev_step.get("type") == "tool_call":
+                                derived_from_step_id = prev_step.get("step_id")
+                                root_cause = f"tool:{prev_step.get('tool_name', 'unknown')}"
+                                break
+                elif step_type == "memory_update":
+                    root_cause = "memory"
+                else:
+                    # Check if error mentions user input
+                    error_lower = error.lower()
+                    if any(keyword in error_lower for keyword in ["user", "input", "request", "invalid"]):
+                        root_cause = "user_input"
+                
+                # Determine severity (simple heuristic)
+                severity = "medium"
+                if "critical" in error.lower() or "fatal" in error.lower():
+                    severity = "high"
+                elif "warning" in error.lower() or "timeout" in error.lower():
+                    severity = "low"
+                
+                failure = {
+                    "step_id": step_id,
+                    "step_type": step_type,
+                    "tool_name": tool_name,
+                    "error": error,
+                    "timestamp": timestamp,
+                    "root_cause": root_cause,
+                    "derived_from_step_id": derived_from_step_id,
+                    "severity": severity,
+                }
+                
+                # Generate recommendation
+                recommendation = self._generate_failure_recommendation(failure, step)
+                failure["recommendation"] = recommendation
+                failure["confidence"] = 0.8  # Default confidence
+                
+                failures.append(failure)
+        
+        return {
+            "session_id": trace.get("session_id"),
+            "total_failures": len(failures),
+            "failures": failures,
+        }
+
+    def _generate_failure_recommendation(self, failure: Dict, step: Dict) -> str:
+        """
+        Generate actionable recommendation for a specific failure.
+        
+        Args:
+            failure: Failure dictionary
+            step: Original step dictionary
+        
+        Returns:
+            Recommendation string
+        """
+        root_cause = failure.get("root_cause", "")
+        error = failure.get("error", "").lower()
+        
+        if root_cause.startswith("tool:"):
+            tool_name = root_cause.split(":")[1]
+            if "timeout" in error or "connection" in error:
+                return f"Retry tool call to {tool_name} with exponential backoff. Consider increasing timeout."
+            elif "rate limit" in error or "quota" in error:
+                return f"Implement rate limiting for {tool_name}. Add queue or delay between calls."
+            elif "authentication" in error or "permission" in error:
+                return f"Check API credentials for {tool_name}. Verify permissions and access tokens."
+            else:
+                return f"Add retry logic with fallback for {tool_name}. Handle exceptions gracefully."
+        
+        elif root_cause == "llm":
+            if "timeout" in error:
+                return "Increase LLM timeout or reduce prompt size. Consider streaming responses."
+            elif "rate limit" in error:
+                return "Implement rate limiting for LLM calls. Add queue or request throttling."
+            elif "invalid" in error or "format" in error:
+                return "Adjust prompt format or structure. Validate input before sending to LLM."
+            else:
+                return "Retry LLM call with adjusted parameters. Consider increasing temperature or verbosity."
+        
+        elif root_cause == "memory":
+            return "Validate memory updates before applying. Add consistency checks and rollback mechanism."
+        
+        elif root_cause == "user_input":
+            return "Add input validation and sanitization. Provide clear error messages to user."
+        
+        else:
+            return "Review error handling for this step type. Add logging and monitoring."
+
     def analyze_all_traces(self) -> Dict[str, Any]:
         """
         Analyze all traces and generate comprehensive insights.
@@ -277,6 +394,29 @@ class TraceAnalyzer:
                     "session_id": trace.get("session_id"),
                     "details": shortcut_details,
                 })
+        
+        # Failure analysis
+        all_failure_analyses = []
+        for trace in traces:
+            failure_analysis = self.analyze_failures(trace)
+            if failure_analysis["total_failures"] > 0:
+                all_failure_analyses.append(failure_analysis)
+        
+        # Aggregate failure statistics
+        failure_by_root_cause = Counter()
+        failure_by_tool = Counter()
+        failure_by_step_type = Counter()
+        recurring_failures = Counter()
+        
+        for analysis in all_failure_analyses:
+            for failure in analysis["failures"]:
+                failure_by_root_cause[failure["root_cause"]] += 1
+                failure_by_step_type[failure["step_type"]] += 1
+                if failure.get("tool_name"):
+                    failure_by_tool[failure["tool_name"]] += 1
+                # Track recurring errors
+                error_key = f"{failure['root_cause']}:{failure['error'][:50]}"
+                recurring_failures[error_key] += 1
         
         # Aggregate statistics
         total_tool_calls = sum(m["total_calls"] for m in all_tool_metrics)
@@ -378,6 +518,23 @@ class TraceAnalyzer:
             "recommendations": self._generate_recommendations(
                 tool_success_rates, shortcut_traces, error_by_tool, error_types
             ),
+            "failure_analysis": {
+                "total_traces_with_failures": len(all_failure_analyses),
+                "total_failures": sum(a.get("total_failures", 0) for a in all_failure_analyses),
+                "failure_rate": len(all_failure_analyses) / len(traces) if traces else 0,
+                "failures_by_root_cause": dict(failure_by_root_cause.most_common(10)),
+                "failures_by_tool": dict(failure_by_tool.most_common(10)),
+                "failures_by_step_type": dict(failure_by_step_type),
+                "recurring_failures": [
+                    {
+                        "pattern": pattern,
+                        "count": count,
+                        "root_cause": pattern.split(":")[0] if ":" in pattern else "unknown",
+                    }
+                    for pattern, count in recurring_failures.most_common(10)
+                ],
+                "failure_reports": all_failure_analyses[:20] if all_failure_analyses else [],  # Limit to top 20
+            },
         }
         
         return insights

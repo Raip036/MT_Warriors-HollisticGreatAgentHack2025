@@ -70,6 +70,35 @@ export interface Insights {
     }>;
   };
   recommendations: string[];
+  failure_analysis: {
+    total_traces_with_failures: number;
+    total_failures: number;
+    failure_rate: number;
+    failures_by_root_cause: Record<string, number>;
+    failures_by_tool: Record<string, number>;
+    failures_by_step_type: Record<string, number>;
+    recurring_failures: Array<{
+      pattern: string;
+      count: number;
+      root_cause: string;
+    }>;
+    failure_reports: Array<{
+      session_id: string;
+      total_failures: number;
+      failures: Array<{
+        step_id: number;
+        step_type: string;
+        tool_name?: string;
+        error: string;
+        timestamp: string;
+        root_cause: string;
+        derived_from_step_id?: number;
+        severity: string;
+        recommendation: string;
+        confidence: number;
+      }>;
+    }>;
+  };
 }
 
 export async function fetchInsights(): Promise<Insights> {
