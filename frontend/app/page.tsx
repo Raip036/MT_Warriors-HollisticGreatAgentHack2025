@@ -6,6 +6,7 @@ import ChatMessage from "../components/ChatMessage";
 import TraceView from "../components/TraceView";
 import TraceViewer from "../components/TraceViewer";
 import Sidebar from "../components/Sidebar";
+import InsightsPage from "../components/InsightsPage";
 import { askBackend } from "../utils/api";
 import { useTrace } from "../utils/useTrace";
 
@@ -25,6 +26,7 @@ export default function Home() {
   >([]);
   const [showTrace, setShowTrace] = useState(false);
   const [traceSessionId, setTraceSessionId] = useState<string | null>(null);
+  const [showInsights, setShowInsights] = useState(false);
 
   const { trace, loading, error } = useTrace(traceSessionId, showTrace);
 
@@ -239,6 +241,11 @@ export default function Home() {
     }
   };
 
+  // Show insights page if requested
+  if (showInsights) {
+    return <InsightsPage onBack={() => setShowInsights(false)} />;
+  }
+
   return (
     <div className="h-screen bg-gray-100 flex overflow-hidden">
       {/* Sidebar */}
@@ -249,6 +256,18 @@ export default function Home() {
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
         currentSessionId={currentSessionId}
+        onShowInsights={() => setShowInsights(true)}
+        onShowTrace={() => {
+          setShowTrace(!showTrace);
+          // Get the latest session_id from the last message
+          const lastMessage = messages
+            .filter((m) => !m.isUser && m.session_id)
+            .pop();
+          if (lastMessage?.session_id) {
+            setTraceSessionId(lastMessage.session_id);
+          }
+        }}
+        hasMessages={messages.length > 0}
       />
 
       {/* Main Content Area */}
@@ -267,28 +286,6 @@ export default function Home() {
             <p className="text-gray-500 text-sm">
               Powered by Amazon Bedrock and Valyu AI.
             </p>
-            
-            {/* Show Trace Toggle */}
-            {messages.length > 0 && (
-              <div className="mt-4 flex justify-center">
-                <button
-                  onClick={() => {
-                    setShowTrace(!showTrace);
-                    // Get the latest session_id from the last message
-                    const lastMessage = messages
-                      .filter((m) => !m.isUser && m.session_id)
-                      .pop();
-                    if (lastMessage?.session_id) {
-                      setTraceSessionId(lastMessage.session_id);
-                    }
-                  }}
-                  className="px-4 py-2 bg-[#39C5BB] text-white rounded-lg hover:bg-[#2fa89f] transition-colors text-sm font-medium flex items-center gap-2"
-                >
-                  <span>🔍</span>
-                  <span>{showTrace ? "Hide" : "Show"} Agent Trace</span>
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Chat Area */}

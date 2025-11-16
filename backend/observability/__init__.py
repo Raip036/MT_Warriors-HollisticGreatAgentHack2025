@@ -6,11 +6,17 @@ from .trace_manager import (
     get_trace_manager,
     generate_step_summary,
 )
+from .trace_analyzer import (
+    TraceAnalyzer,
+    analyze_traces,
+)
 
 __all__ = [
     "TraceManager",
     "StepType",
     "get_trace_manager",
     "generate_step_summary",
+    "TraceAnalyzer",
+    "analyze_traces",
 ]
 
