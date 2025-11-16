@@ -1,13 +1,15 @@
 # backend/agents/medical_reasoning_agent.py
 
 import os
-from typing import List
+import time
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 from agents.agent import get_chat_model
 from agents.input_classifier import InputClassification
 from agents.safety_advisor import SafetyAssessment
+from observability import get_trace_manager, StepType
 
 # Try to import Valyu, but don't crash if it's not installed
 try:
@@ -69,10 +71,17 @@ class MedicalReasoningAgent:
     # ----------------------------------------
     # Evidence retrieval
     # ----------------------------------------
-    def fetch_evidence(self, query: str, max_results: int = 5) -> List[EvidenceItem]:
-
+    def fetch_evidence(
+        self, 
+        query: str, 
+        max_results: int = 5,
+        session_id: Optional[str] = None
+    ) -> List[EvidenceItem]:
+        """Fetch evidence with optional tracing."""
+        trace_manager = get_trace_manager() if session_id else None
+        
         if self.mock_mode or not self.valyu_client:
-            return [
+            items = [
                 EvidenceItem(
                     title="Mock Evidence Example",
                     url="https://example.com/mock",
@@ -82,29 +91,84 @@ class MedicalReasoningAgent:
                     ),
                 )
             ]
-
-        response = self.valyu_client.search(query)
-        items: List[EvidenceItem] = []
-
-        for r in getattr(response, "results", []):
-            items.append(
-                EvidenceItem(
-                    title=getattr(r, "title", "") or "",
-                    url=getattr(r, "url", "") or "",
-                    content=getattr(r, "content", "") or "",
+            
+            # Trace mock tool call
+            if trace_manager and session_id:
+                trace_manager.append_tool_call(
+                    session_id=session_id,
+                    tool_name="valyu_search",
+                    arguments={"query": query, "max_results": max_results},
+                    output=[item.model_dump() for item in items],
+                    duration_ms=0,
+                    success=True,
+                    metadata={"agent": "MedicalReasoningAgent", "mode": "mock", "summary": f"Mock search returned {len(items)} results"}
                 )
-            )
+            
+            return items
 
-        if not items:
-            items.append(
+        # Trace real Valyu search
+        start_time = time.time()
+        try:
+            response = self.valyu_client.search(query)
+            duration_ms = (time.time() - start_time) * 1000
+            
+            items: List[EvidenceItem] = []
+            for r in getattr(response, "results", []):
+                items.append(
+                    EvidenceItem(
+                        title=getattr(r, "title", "") or "",
+                        url=getattr(r, "url", "") or "",
+                        content=getattr(r, "content", "") or "",
+                    )
+                )
+
+            if not items:
+                items.append(
+                    EvidenceItem(
+                        title="No documents found",
+                        url="",
+                        content="No specific documents returned; answer will reflect uncertainty.",
+                    )
+                )
+            
+            # Trace successful tool call
+            if trace_manager and session_id:
+                trace_manager.append_tool_call(
+                    session_id=session_id,
+                    tool_name="valyu_search",
+                    arguments={"query": query, "max_results": max_results},
+                    output=[item.model_dump() for item in items],
+                    duration_ms=duration_ms,
+                    success=True,
+                    metadata={"agent": "MedicalReasoningAgent", "summary": f"Valyu search returned {len(items)} results"}
+                )
+            
+            return items
+            
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Trace failed tool call
+            if trace_manager and session_id:
+                trace_manager.append_tool_call(
+                    session_id=session_id,
+                    tool_name="valyu_search",
+                    arguments={"query": query, "max_results": max_results},
+                    output=None,
+                    duration_ms=duration_ms,
+                    success=False,
+                    error=str(e),
+                    metadata={"agent": "MedicalReasoningAgent", "summary": "Valyu search failed"}
+                )
+            
+            # Return empty result on error
+            return [
                 EvidenceItem(
-                    title="No documents found",
+                    title="Search Error",
                     url="",
-                    content="No specific documents returned; answer will reflect uncertainty.",
+                    content=f"Error during evidence retrieval: {str(e)}",
                 )
-            )
-
-        return items
+            ]
 
     # ----------------------------------------
     # Main reasoning pipeline
@@ -114,11 +178,12 @@ class MedicalReasoningAgent:
         user_input: str,
         classification: InputClassification,
         safety: SafetyAssessment,
+        session_id: Optional[str] = None,
     ) -> MedicalAnswer:
 
         # Prepare Valyu search
         query = f"{user_input} (intent={classification.intent})"
-        evidence_items = self.fetch_evidence(query)
+        evidence_items = self.fetch_evidence(query, session_id=session_id)
         citations = [e.url for e in evidence_items if e.url]
 
         evidence_text = "\n\n".join(
@@ -160,18 +225,51 @@ IMPORTANT: When evidence is provided, you should give a substantive answer. Don'
             {"role": "user", "content": full_prompt}
         ]
 
+        # Trace LLM call
+        trace_manager = get_trace_manager() if session_id else None
+        start_time = time.time()
+        
         try:
             llm_response = self.llm.invoke(messages)
+            duration_ms = (time.time() - start_time) * 1000
 
             # Some wrappers return a dict with `text`, some return raw text
             if isinstance(llm_response, dict) and "text" in llm_response:
                 answer_text = llm_response["text"]
             else:
                 answer_text = str(llm_response)
+            
+            # Trace successful LLM call
+            if trace_manager and session_id:
+                trace_manager.append_trace(
+                    session_id=session_id,
+                    step_type=StepType.DECISION,
+                    input_data={"messages": messages, "evidence_count": len(evidence_items)},
+                    output_data={"response": answer_text[:500] + "..." if len(answer_text) > 500 else answer_text},
+                    metadata={
+                        "agent": "MedicalReasoningAgent",
+                        "model": "claude-3-5-sonnet",
+                        "duration_ms": duration_ms,
+                        "summary": f"Generated medical answer ({len(answer_text)} chars)"
+                    }
+                )
 
         except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
             print("❗ MedicalReasoningAgent LLM error:", str(e))
             answer_text = "The medical reasoning model encountered an error and could not generate a response."
+            
+            # Trace failed LLM call
+            if trace_manager and session_id:
+                trace_manager.append_trace(
+                    session_id=session_id,
+                    step_type=StepType.DECISION,
+                    input_data={"messages": messages, "evidence_count": len(evidence_items)},
+                    output_data=None,
+                    metadata={"agent": "MedicalReasoningAgent", "duration_ms": duration_ms, "summary": "LLM call failed"},
+                    success=False,
+                    error=str(e)
+                )
 
         # Warnings logic
         if safety.needs_handoff or safety.risk_level == "high":

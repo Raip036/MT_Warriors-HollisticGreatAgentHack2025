@@ -4,12 +4,18 @@ import { useState, useRef, useEffect } from "react";
 import ChatBox from "../components/ChatBox";
 import ChatMessage from "../components/ChatMessage";
 import TraceView from "../components/TraceView";
+import TraceViewer from "../components/TraceViewer";
 import { askBackend } from "../utils/api";
+import { useTrace } from "../utils/useTrace";
 
 export default function Home() {
   const [messages, setMessages] = useState<
-    { text: string; isUser?: boolean; trace?: any }[]
+    { text: string; isUser?: boolean; trace?: any; session_id?: string }[]
   >([]);
+  const [showTrace, setShowTrace] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  const { trace, loading, error } = useTrace(currentSessionId, showTrace);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +44,26 @@ export default function Home() {
         <p className="text-gray-500 text-sm">
           Powered by Amazon Bedrock and Valyu AI.
         </p>
+        
+        {/* Show Trace Toggle */}
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={() => {
+              setShowTrace(!showTrace);
+              // Get the latest session_id from the last message
+              const lastMessage = messages
+                .filter((m) => !m.isUser && m.session_id)
+                .pop();
+              if (lastMessage?.session_id) {
+                setCurrentSessionId(lastMessage.session_id);
+              }
+            }}
+            className="px-4 py-2 bg-[#39C5BB] text-white rounded-lg hover:bg-[#2fa89f] transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <span>🔍</span>
+            <span>{showTrace ? "Hide" : "Show"} Agent Trace</span>
+          </button>
+        </div>
       </div>
 
       {/* Chat scroll area */}
@@ -63,6 +89,13 @@ export default function Home() {
               )}
             </div>
           ))}
+          
+          {/* Trace Viewer */}
+          {showTrace && (
+            <div className="mt-4 w-full">
+              <TraceViewer trace={trace} loading={loading} error={error} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -117,14 +150,22 @@ export default function Home() {
                 );
               });
 
+              const finalMessage = {
+                text: data.response ?? data.error ?? "No response from agent.",
+                isUser: false,
+                trace: data.trace || null,
+                session_id: data.session_id || null,
+              };
+              
               setMessages((prev) => [
                 ...prev.filter((m) => !m.isTyping),
-                {
-                  text: data.response ?? data.error ?? "No response from agent.",
-                  isUser: false,
-                  trace: data.trace || null,
-                },
+                finalMessage,
               ]);
+              
+              // Update current session ID if trace is shown
+              if (showTrace && data.session_id) {
+                setCurrentSessionId(data.session_id);
+              }
             }}
           />
         </div>
