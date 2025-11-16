@@ -91,19 +91,28 @@ export default function Home() {
               setMessages((prev) => [...prev, { text: msg, isUser: true }]);
 
               const typingMessage = {
-                text: "pharmamiku is thinking…",
+                text: "pharmamiku is identifying the problem…",
                 isUser: false,
                 isTyping: true,
               };
 
               setMessages((prev) => [...prev, typingMessage]);
 
-              const data = await askBackend(msg);
+              const data = await askBackend(msg, (progressMessage) => {
+                // Update the typing message with progress
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.isTyping
+                      ? { ...m, text: progressMessage }
+                      : m
+                  )
+                );
+              });
 
               setMessages((prev) => [
                 ...prev.filter((m) => !m.isTyping),
                 {
-                  text: data.response ?? data.error ?? "No response.",
+                  text: data.response ?? data.error ?? "No response from agent.",
                   isUser: false,
                 },
               ]);

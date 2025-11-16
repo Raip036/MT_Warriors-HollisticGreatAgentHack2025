@@ -12,6 +12,7 @@ venv/
 fastapivenv/
 env/
 ENV/
+nybubu/
 env.bak/
 venv.bak/
 
