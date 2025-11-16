@@ -8,7 +8,7 @@ import uuid
 from typing import Any
 
 from agents.orchestrator import Orchestrator
-from observability import get_trace_manager, generate_step_summary
+from observability import get_trace_manager, generate_step_summary, TraceAnalyzer
 
 
 def safe_json_serialize(obj: Any) -> str:
@@ -278,6 +278,55 @@ def get_trace(session_id: str):
     
     # Return as JSONResponse with manually serialized data
     return JSONResponse(content=cleaned_trace)
+
+# -----------------------------
+# INSIGHTS ENDPOINT
+# -----------------------------
+@app.get("/insights")
+def get_insights(format: str = "json"):
+    """
+    Get behavioral insights from all traces.
+    
+    Args:
+        format: Output format - "json" (default) or "report" for human-readable text
+    
+    Returns:
+        JSON insights or plain text report
+    """
+    analyzer = TraceAnalyzer()
+    insights = analyzer.analyze_all_traces()
+    
+    if format == "report":
+        from fastapi.responses import PlainTextResponse
+        report = analyzer.generate_report(insights)
+        return PlainTextResponse(content=report)
+    
+    return insights
+
+@app.get("/insights/csv")
+def get_insights_csv():
+    """
+    Export insights as CSV files for dashboard integration.
+    Returns download links or file paths.
+    """
+    from pathlib import Path
+    import tempfile
+    
+    analyzer = TraceAnalyzer()
+    insights = analyzer.analyze_all_traces()
+    
+    # Create temporary directory for CSV files
+    temp_dir = Path(tempfile.mkdtemp())
+    csv_path = temp_dir / "insights"
+    
+    analyzer.export_to_csv(insights, csv_path)
+    
+    # Return paths to generated CSV files
+    return {
+        "tool_metrics_csv": str(csv_path.parent / f"{csv_path.stem}_tools.csv"),
+        "step_metrics_csv": str(csv_path.parent / f"{csv_path.stem}_steps.csv"),
+        "note": "CSV files generated. In production, consider serving these files directly or uploading to cloud storage."
+    }
 
 # -----------------------------
 # ROOT ENDPOINT

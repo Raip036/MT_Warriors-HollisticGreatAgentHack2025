@@ -16,6 +16,9 @@ interface SidebarProps {
   onSelectSession: (session: ChatSession) => void;
   onNewChat: () => void;
   currentSessionId: string | null;
+  onShowInsights?: () => void;
+  onShowTrace?: () => void;
+  hasMessages?: boolean;
 }
 
 export default function Sidebar({
@@ -25,6 +28,9 @@ export default function Sidebar({
   onSelectSession,
   onNewChat,
   currentSessionId,
+  onShowInsights,
+  onShowTrace,
+  hasMessages = false,
 }: SidebarProps) {
   return (
     <>
@@ -111,8 +117,30 @@ export default function Sidebar({
             />
           </div>
 
+          {/* Action Buttons */}
+          <div className="pt-4 border-t border-gray-300 space-y-2">
+            {onShowTrace && hasMessages && (
+              <button
+                onClick={onShowTrace}
+                className="w-full bg-[#39C5BB] text-white py-2 px-4 rounded-lg hover:bg-[#2fa89f] transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <span>🔍</span>
+                <span>View Trace</span>
+              </button>
+            )}
+            {onShowInsights && (
+              <button
+                onClick={onShowInsights}
+                className="w-full bg-[#FFB7D5] text-white py-2 px-4 rounded-lg hover:bg-[#e6a5c4] transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <span>📊</span>
+                <span>View Insights</span>
+              </button>
+            )}
+          </div>
+
           {/* User Info */}
-          <div className="flex items-center gap-2 pt-2 border-t border-gray-300">
+          <div className="flex items-center gap-2 pt-2 border-t border-gray-300 mt-2">
             <div className="w-8 h-8 rounded-full bg-gray-300"></div>
             <span className="text-sm text-gray-600">Nyree Marsh</span>
           </div>

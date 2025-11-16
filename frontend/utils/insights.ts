@@ -1,0 +1,82 @@
+const BACKEND_URL = "http://localhost:8000";
+
+export interface Insights {
+  summary: {
+    total_traces: number;
+    total_tool_calls: number;
+    total_successful_calls: number;
+    total_failed_calls: number;
+    overall_success_rate: number;
+    shortcut_rate: number;
+    total_errors: number;
+    generated_at: string;
+  };
+  tool_metrics: {
+    most_used_tools: Record<string, number>;
+    tool_success_rates: Record<
+      string,
+      {
+        success_rate: number;
+        total_calls: number;
+        successful: number;
+        failed: number;
+        avg_duration_ms: number;
+        min_duration_ms: number;
+        max_duration_ms: number;
+      }
+    >;
+    tool_reliability_ranking: Array<[string, any]>;
+  };
+  step_metrics: {
+    step_type_distribution: Record<string, number>;
+    step_type_avg_latencies: Record<
+      string,
+      {
+        avg_ms: number;
+        min_ms: number;
+        max_ms: number;
+        count: number;
+      }
+    >;
+  };
+  shortcuts: {
+    total_suspected: number;
+    shortcut_rate: number;
+    traces_with_shortcuts: Array<{
+      session_id: string;
+      details: any;
+    }>;
+  };
+  error_patterns: {
+    most_common_errors: Record<string, number>;
+    errors_by_tool: Record<string, number>;
+    errors_by_step_type: Record<string, number>;
+    total_error_count: number;
+  };
+  bottlenecks: {
+    slow_steps: Array<{
+      step_type: string;
+      avg_latency_ms: number;
+      count: number;
+    }>;
+    unreliable_tools: Array<{
+      tool: string;
+      success_rate: number;
+      total_calls: number;
+    }>;
+    high_error_tools: Array<{
+      tool: string;
+      error_count: number;
+    }>;
+  };
+  recommendations: string[];
+}
+
+export async function fetchInsights(): Promise<Insights> {
+  const response = await fetch(`${BACKEND_URL}/insights`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch insights: ${response.statusText}`);
+  }
+  return response.json();
+}
+
