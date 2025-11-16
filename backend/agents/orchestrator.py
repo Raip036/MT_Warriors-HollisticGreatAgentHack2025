@@ -180,8 +180,9 @@ class Orchestrator:
             
             progress("finalising", "pharmamiku is finalising answer…")
             final = (
-                "⚠️ This may be a serious medical situation. "
-                "Please seek professional medical help immediately."
+                "💊 Hey there! I'm really concerned about what you've shared. "
+                "This sounds like something that needs immediate attention from a healthcare professional. "
+                "Please reach out to a doctor, pharmacist, or emergency services right away - they're the best people to help you with this! ✨"
             )
             trace["final_answer"] = final
             trace["safety_decision"] = "BLOCK"
@@ -252,18 +253,7 @@ class Orchestrator:
         # 3️⃣ MEDICAL REASONING AGENT
         # ------------------------------------------------------------
         try:
-            progress("researching", "pharmamiku is researching…")
-            
-            # Log decision: starting medical reasoning
-            self.trace_manager.append_decision(
-                session_id=session_id,
-                input_state={"user_input": user_input, "classification": classification.model_dump(), "safety": safety.model_dump()},
-                reasoning="Starting medical reasoning with evidence retrieval",
-                selected_action="medical_reasoning",
-                metadata={"agent": "MedicalReasoningAgent", "step": 3}
-            )
-            
-            start_time = time.time()
+            progress("researching", "pharmamiku is researching")
             medical_answer: MedicalAnswer = self.agent3.run(
                 user_input=user_input,
                 classification=classification,
@@ -302,6 +292,7 @@ class Orchestrator:
 
         except Exception as e:
             # Fail-safe: If Bedrock OR Valyu crashes
+            progress("finalising", "pharmamiku is finalising answer")
             # Log error
             self.trace_manager.append_trace(
                 session_id=session_id,
@@ -438,6 +429,7 @@ class Orchestrator:
             )
 
         except Exception as e:
+            progress("finalising", "pharmamiku is finalising answer")
             # Log error
             self.trace_manager.append_trace(
                 session_id=session_id,
