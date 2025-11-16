@@ -21,7 +21,7 @@ export default function Home() {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<
-    { text: string; isUser?: boolean; trace?: any; session_id?: string; isTyping?: boolean }[]
+    { text: string; isUser?: boolean; trace?: any; isTyping?: boolean; session_id?: string }[]
   >([]);
   const [showTrace, setShowTrace] = useState(false);
   const [traceSessionId, setTraceSessionId] = useState<string | null>(null);
@@ -73,9 +73,47 @@ export default function Home() {
 
   // Start a new chat session
   const handleNewChat = () => {
+    // Save current session before clearing (if there are messages)
+    if (messages.length > 0) {
+      const userMessages = messages.filter((m) => m.isUser);
+      if (userMessages.length > 0) {
+        const title = generateSessionTitle(userMessages[0].text);
+        const sessionId = currentSessionId || `session_${Date.now()}`;
+
+        const session: ChatSession = {
+          id: sessionId,
+          title,
+          timestamp: currentSessionId
+            ? chatSessions.find((s) => s.id === currentSessionId)?.timestamp ||
+              new Date()
+            : new Date(),
+          messages: messages.filter((m) => !m.isTyping), // Don't save typing indicators
+        };
+
+        let updatedSessions: ChatSession[];
+        if (currentSessionId) {
+          // Update existing session
+          updatedSessions = chatSessions.map((s) => (s.id === currentSessionId ? session : s));
+        } else {
+          // Create new session
+          updatedSessions = [session, ...chatSessions];
+        }
+
+        // Update state
+        setChatSessions(updatedSessions);
+        
+        // Immediately save to localStorage
+        localStorage.setItem(
+          "pharmamiku_chat_sessions",
+          JSON.stringify(updatedSessions)
+        );
+      }
+    }
+
+    // Now clear for new chat
     setCurrentSessionId(null);
     setMessages([]);
-    setSidebarOpen(false);
+    // Don't close sidebar - only X button should close it
     setShowTrace(false);
     setTraceSessionId(null);
   };
@@ -114,16 +152,24 @@ export default function Home() {
       messages: messages.filter((m) => !m.isTyping), // Don't save typing indicators
     };
 
+    let updatedSessions: ChatSession[];
     if (currentSessionId) {
       // Update existing session
-      setChatSessions((prev) =>
-        prev.map((s) => (s.id === currentSessionId ? session : s))
-      );
+      updatedSessions = chatSessions.map((s) => (s.id === currentSessionId ? session : s));
     } else {
       // Create new session
-      setChatSessions((prev) => [session, ...prev]);
+      updatedSessions = [session, ...chatSessions];
       setCurrentSessionId(sessionId);
     }
+
+    // Update state
+    setChatSessions(updatedSessions);
+    
+    // Immediately save to localStorage
+    localStorage.setItem(
+      "pharmamiku_chat_sessions",
+      JSON.stringify(updatedSessions)
+    );
   };
 
   // Handle sending a message
@@ -139,7 +185,7 @@ export default function Home() {
 
     // Add typing indicator
     const typingMessage = {
-      text: "pharmamiku is identifying the problem…",
+      text: "pharmamiku is identifying the problem",
       isUser: false,
       isTyping: true,
     };
@@ -161,7 +207,7 @@ export default function Home() {
         text: data.response ?? data.error ?? "No response from agent.",
         isUser: false,
         trace: data.trace || null,
-        session_id: data.session_id || null,
+        session_id: data.session_id || undefined,
       };
 
       setMessages((prev) => [
@@ -172,6 +218,8 @@ export default function Home() {
       // Update trace session ID if available
       if (data.session_id) {
         setTraceSessionId(data.session_id);
+      } else {
+        setTraceSessionId(null);
       }
 
       // Auto-save after a short delay
@@ -192,14 +240,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F3F7FF] flex flex-col items-center relative">
-      {/* Pharmamiku Mascot */}
-      <img
-        src="/pharmamiku.png"
-        alt="Pharmamiku"
-        className="w-72 fixed bottom-5 left-5 opacity-90 pointer-events-none"
-      />
-
+    <div className="h-screen bg-gray-100 flex overflow-hidden">
       {/* Sidebar */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -210,99 +251,92 @@ export default function Home() {
         currentSessionId={currentSessionId}
       />
 
-      {/* Title */}
-      <div className="text-center mt-10 mb-4">
-        <h1 className="text-[44px] font-[400] leading-tight">
-          <span className="text-[#39C5BB]">pharma</span>
-          <span className="text-[#FFB7D5] font-[600]">miku</span>
-        </h1>
-        <p className="text-gray-500 text-sm">
-          Powered by Amazon Bedrock and Valyu AI.
-        </p>
-        
-        {/* Show Trace Toggle */}
-        <div className="mt-4 flex justify-center">
-          <button
-            onClick={() => {
-              setShowTrace(!showTrace);
-              // Get the latest session_id from the last message
-              const lastMessage = messages
-                .filter((m) => !m.isUser && m.session_id)
-                .pop();
-              if (lastMessage?.session_id) {
-                setTraceSessionId(lastMessage.session_id);
-              }
-            }}
-            className="px-4 py-2 bg-[#39C5BB] text-white rounded-lg hover:bg-[#2fa89f] transition-colors text-sm font-medium flex items-center gap-2"
+      {/* Main Content Area */}
+      <div
+        className={`flex-1 transition-all duration-300 overflow-hidden flex ${
+          sidebarOpen ? "md:ml-64" : "ml-0"
+        }`}
+      >
+        <div className="w-full h-full flex flex-col bg-white md:rounded-lg md:m-4 md:shadow-lg md:border md:border-gray-200 md:max-h-[calc(100vh-2rem)]">
+          {/* Header */}
+          <div className="text-center py-8 border-b border-gray-100">
+            <h1 className="text-[44px] font-[400] leading-tight mb-2">
+              <span className="text-[#39C5BB]">pharma</span>
+              <span className="text-[#FFB7D5] font-[600]">miku</span>
+            </h1>
+            <p className="text-gray-500 text-sm">
+              Powered by Amazon Bedrock and Valyu AI.
+            </p>
+            
+            {/* Show Trace Toggle */}
+            {messages.length > 0 && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => {
+                    setShowTrace(!showTrace);
+                    // Get the latest session_id from the last message
+                    const lastMessage = messages
+                      .filter((m) => !m.isUser && m.session_id)
+                      .pop();
+                    if (lastMessage?.session_id) {
+                      setTraceSessionId(lastMessage.session_id);
+                    }
+                  }}
+                  className="px-4 py-2 bg-[#39C5BB] text-white rounded-lg hover:bg-[#2fa89f] transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <span>🔍</span>
+                  <span>{showTrace ? "Hide" : "Show"} Agent Trace</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Area */}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto px-6 py-4 relative"
           >
-            <span>🔍</span>
-            <span>{showTrace ? "Hide" : "Show"} Agent Trace</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Chat scroll area */}
-      <div
-        ref={scrollRef}
-        className="
-          w-full max-w-3xl
-          overflow-y-auto
-          px-4
-          pb-12
-          relative
-        "
-        style={{ height: "calc(100vh - 250px)" }}
-      >
-        <div className="flex flex-col gap-4">
-          {messages.map((m, i) => (
-            <div key={i} className="flex flex-col">
-              <ChatMessage text={m.text} isUser={m.isUser} />
-              {!m.isUser && !m.isTyping && m.trace && (
-                <div className="self-start max-w-xl mt-2">
-                  <TraceView trace={m.trace} />
+            {messages.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-gray-400 text-lg mb-2">
+                    Start a conversation with PharmaMiku
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    Ask me anything about medications and healthcare!
+                  </p>
                 </div>
-              )}
-            </div>
-          ))}
-          
-          {/* Trace Viewer */}
-          {showTrace && (
-            <div className="mt-4 w-full">
-              <TraceViewer trace={trace} loading={loading} error={error} />
-            </div>
-          )}
-        </div>
-      </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {messages.map((m, i) => (
+                  <div key={i} className="flex flex-col">
+                    <ChatMessage text={m.text} isUser={m.isUser} isTyping={m.isTyping} />
+                    {!m.isUser && !m.isTyping && m.trace && (
+                      <div className="self-start max-w-xl mt-2">
+                        <TraceView trace={m.trace} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {/* Trace Viewer */}
+                {showTrace && (
+                  <div className="mt-4 w-full">
+                    <TraceViewer trace={trace} loading={loading} error={error} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-      {/* Single fade behind input (correct!) */}
-      <div
-        className="
-          pointer-events-none
-          fixed
-          bottom-[56px]
-          left-0
-          w-full
-          flex
-          justify-center
-        "
-      >
-        <div
-          className="
-            w-full
-            max-w-3xl
-            h-12
-            bg-gradient-to-t
-            from-[#F3F7FF]
-            to-transparent
-            backdrop-blur-md
-          "
-        ></div>
-      </div>
-
-      {/* Input bar */}
-      <div className="fixed bottom-8 w-full flex justify-center">
-        <div className="w-full max-w-3xl px-4">
-          <ChatBox onSend={handleSend} />
+          {/* Input Area */}
+          <div className="border-t border-gray-100 p-4">
+            <ChatBox onSend={handleSend} />
+            <p className="text-xs text-gray-400 text-center mt-2">
+              Not medical advice.
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -61,32 +61,43 @@ export default function Sidebar({
           </button>
 
           {/* Chat History */}
-          <div className="flex-1 overflow-y-auto sidebar-scroll">
-            <h3 className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
+          <div className="flex-1 overflow-y-auto sidebar-scroll min-h-0">
+            <h3 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
               Chat History
             </h3>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {chatSessions.length === 0 ? (
-                <p className="text-xs text-gray-500 italic py-4">
+                <p className="text-xs text-gray-500 italic py-4 text-center">
                   No chat history yet
                 </p>
               ) : (
-                chatSessions.map((session) => (
-                  <button
-                    key={session.id}
-                    onClick={() => onSelectSession(session)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                      currentSessionId === session.id
-                        ? "bg-[#39C5BB] text-white"
-                        : "bg-white/50 text-gray-700 hover:bg-white/70"
-                    }`}
-                  >
-                    <div className="truncate font-medium">{session.title}</div>
-                    <div className="text-xs opacity-70 mt-1">
-                      {new Date(session.timestamp).toLocaleDateString()}
-                    </div>
-                  </button>
-                ))
+                chatSessions.map((session) => {
+                  // Get first user message for preview
+                  const firstUserMessage = session.messages?.find((m: any) => m.isUser)?.text || session.title;
+                  const preview = firstUserMessage.length > 40 
+                    ? firstUserMessage.substring(0, 40) + "..." 
+                    : firstUserMessage;
+                  
+                  return (
+                    <button
+                      key={session.id}
+                      onClick={() => onSelectSession(session)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                        currentSessionId === session.id
+                          ? "bg-[#39C5BB] text-white shadow-sm"
+                          : "bg-white/50 text-gray-700 hover:bg-white/80 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="truncate font-medium mb-1">{session.title}</div>
+                      <div className="text-xs opacity-70 truncate mb-1">
+                        {preview}
+                      </div>
+                      <div className="text-xs opacity-60">
+                        {new Date(session.timestamp).toLocaleDateString()}
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>

@@ -72,7 +72,7 @@ class Orchestrator:
         # ------------------------------------------------------------
         # 1️⃣ INPUT CLASSIFIER
         # ------------------------------------------------------------
-        progress("classifying", "pharmamiku is identifying the problem…")
+        progress("classifying", "pharmamiku is identifying the problem")
         
         # Log decision step: starting classification
         start_time = time.time()
@@ -120,7 +120,7 @@ class Orchestrator:
         # ------------------------------------------------------------
         # 2️⃣ SAFETY EVALUATION
         # ------------------------------------------------------------
-        progress("safety", "pharmamiku is assessing safety…")
+        progress("safety", "pharmamiku is assessing safety")
         
         # Log decision step: starting safety evaluation
         start_time = time.time()
@@ -178,7 +178,7 @@ class Orchestrator:
                 metadata={"agent": "Orchestrator", "step": "early_stop", "reason": "high_risk"}
             )
             
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             final = (
                 "💊 Hey there! I'm really concerned about what you've shared. "
                 "This sounds like something that needs immediate attention from a healthcare professional. "
@@ -306,7 +306,7 @@ class Orchestrator:
                 error=str(e)
             )
             
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             fallback = (
                 "⚠️ I had trouble generating a full medical explanation. "
                 "Please consult a pharmacist or healthcare provider for accurate guidance."
@@ -380,7 +380,7 @@ class Orchestrator:
         # 4️⃣ PHARMA MIKU PERSONA LAYER
         # ------------------------------------------------------------
         try:
-            progress("thinking", "pharmamiku is thinking…")
+            progress("thinking", "pharmamiku is thinking")
             
             # Log decision: applying persona layer
             self.trace_manager.append_decision(
@@ -443,7 +443,7 @@ class Orchestrator:
                 error=str(e)
             )
             
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             backup = (
                 "Here is the medical information, but I could not apply the persona layer."
             )
@@ -516,7 +516,7 @@ class Orchestrator:
         # 5️⃣ JUDGE AGENT (Final Safety & Quality Check)
         # ------------------------------------------------------------
         try:
-            progress("judging", "pharmamiku is judging…")
+            progress("judging", "pharmamiku is judging")
             
             # Log decision: starting judge evaluation
             self.trace_manager.append_decision(
@@ -615,7 +615,7 @@ class Orchestrator:
         # 6️⃣ TRACE EXPLAINER (Glass Box Reasoning)
         # ------------------------------------------------------------
         try:
-            progress("finalising", "pharmamiku is finalising answer…")
+            progress("finalising", "pharmamiku is finalising answer")
             
             # Log decision: generating trace explanation
             self.trace_manager.append_decision(
